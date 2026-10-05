@@ -16,8 +16,14 @@ export default defineConfig({
   // Use one worker on CI
   workers: process.env.CI ? 1 : undefined,
 
-  // Generate HTML report
-  reporter: 'html',
+  // Jenkins reads JUnit results; retain the HTML report for investigation.
+  reporter: process.env.CI
+    ? [
+        ['list'],
+        ['html', { open: 'never' }],
+        ['junit', { outputFile: 'test-results/junit.xml' }],
+      ]
+    : 'html',
 
   // Shared settings for all tests
   use: {
