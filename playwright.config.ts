@@ -13,10 +13,10 @@ export default defineConfig({
   // Retry failed tests on CI
   retries: process.env.CI ? 2 : 0,
 
-  // Use one worker on CI
-  workers: process.env.CI ? 1 : undefined,
+  // Use 2 workers on CI/Jenkins
+  workers: process.env.CI ? 2 : undefined,
 
-  // Jenkins reads JUnit results; retain the HTML report for investigation.
+  // Jenkins reads JUnit results; retain the HTML report for investigation
   reporter: process.env.CI
     ? [
         ['list'],
