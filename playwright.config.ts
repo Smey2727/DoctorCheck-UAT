@@ -10,13 +10,13 @@ export default defineConfig({
   // Fail if test.only is accidentally committed
   forbidOnly: !!process.env.CI,
 
-  // Retry failed tests on CI
+  // Retry failed tests on CI/Jenkins
   retries: process.env.CI ? 2 : 0,
 
   // Use 2 workers on CI/Jenkins
-  workers: process.env.CI ? 2 : undefined,
+  workers: process.env.CI ? 3 : undefined,
 
-  // Jenkins reads JUnit results; retain the HTML report for investigation
+  // Test reporters
   reporter: process.env.CI
     ? [
         ['list'],
@@ -30,7 +30,7 @@ export default defineConfig({
     // Deployed DoctorCheck application
     baseURL: 'https://doctorcheck.saerosoft.com',
 
-    // Run browser without opening it
+    // Run browsers without opening them
     headless: true,
 
     // Capture trace when a test is retried
@@ -45,10 +45,27 @@ export default defineConfig({
 
   // Browser configuration
   projects: [
+    // Google Chrome / Microsoft Edge engine
     {
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+      },
+    },
+
+    // Mozilla Firefox
+    {
+      name: 'firefox',
+      use: {
+        ...devices['Desktop Firefox'],
+      },
+    },
+
+    // Safari engine
+    {
+      name: 'webkit',
+      use: {
+        ...devices['Desktop Safari'],
       },
     },
   ],
