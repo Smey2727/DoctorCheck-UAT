@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     options {
-        timeout(time: 30, unit: 'MINUTES')
+        timeout(time: 60, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '15'))
     }
 
@@ -20,9 +20,9 @@ pipeline {
             }
         }
 
-        stage('Install Playwright') {
+        stage('Install Playwright Browsers') {
             steps {
-                bat 'npx playwright install chromium'
+                bat 'npx playwright install chromium firefox webkit'
             }
         }
 
@@ -36,7 +36,7 @@ pipeline {
     post {
         always {
             archiveArtifacts(
-                artifacts: 'playwright-report/**',
+                artifacts: 'playwright-report/**, test-results/**',
                 allowEmptyArchive: true
             )
         }
