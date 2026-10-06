@@ -14,7 +14,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
 
   // Use 2 workers on CI/Jenkins
-  workers: process.env.CI ? 3 : undefined,
+  workers: process.env.CI ? 4 : undefined,
 
   // Test reporters
   reporter: process.env.CI
