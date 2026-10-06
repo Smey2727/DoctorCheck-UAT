@@ -1,70 +1,52 @@
 pipeline {
-    agent { label 'windows' }
+    agent any
 
     options {
-        skipDefaultCheckout(true)
-        disableConcurrentBuilds()
-        buildDiscarder(logRotator(numToKeepStr: '10'))
-    }
-
-    environment {
-        CI = 'true'
-        // Playwright is a devDependency and must be installed in this job.
-        NODE_ENV = 'development'
-        PLAYWRIGHT_HTML_OPEN = 'never'
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '15'))
     }
 
     stages {
-        stage('Checkout UAT repository') {
+
+        stage('Checkout') {
             steps {
-                // Uses the repository, main branch and credentials from the job.
                 checkout scm
-                // Prevent reports from an earlier build being published again.
-                dir('test-results') { deleteDir() }
-                dir('playwright-report') { deleteDir() }
             }
         }
 
-        stage('Check tools') {
+        stage('Install Dependencies') {
             steps {
-                bat 'node --version'
-                bat 'npm --version'
-                bat 'git --version'
-                bat 'python --version'
-                bat 'python -m pip --version'
+                sh 'npm ci'
             }
         }
 
-        stage('Install Node dependencies') {
+        stage('Install Playwright') {
             steps {
-                bat 'npm ci'
+                sh 'npx playwright install --with-deps chromium'
             }
         }
 
-        stage('Install Chromium') {
+        stage('Run Playwright Tests') {
             steps {
-                bat 'npx playwright install chromium'
+                sh 'npx playwright test'
             }
         }
+    }
 
-        stage('Install PDF test dependency') {
-            steps {
-                // TC-HP-020 imports pypdf from this project-local directory.
-                bat 'python -m pip install --upgrade --target .uat-tools/python -r tests/helpers/requirements-pdf.txt'
-            }
+    post {
+        always {
+            archiveArtifacts(
+                artifacts: 'playwright-report/**',
+                allowEmptyArchive: true
+            )
         }
 
-        stage('Run Playwright tests') {
-            steps {
-                // A nonzero exit code fails the build; do not hide test failures.
-                bat 'npx playwright test'
-            }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'playwright-report/**,test-results/**', allowEmptyArchive: true
-                    junit testResults: 'test-results/junit.xml', allowEmptyResults: false, skipPublishingChecks: true
-                }
-            }
+        success {
+            echo 'Playwright tests passed.'
+        }
+
+        failure {
+            echo 'Playwright tests failed.'
         }
     }
 }
