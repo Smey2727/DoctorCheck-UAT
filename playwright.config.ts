@@ -61,12 +61,5 @@ export default defineConfig({
       },
     },
 
-    // Safari engine
-    {
-      name: 'webkit',
-      use: {
-        ...devices['Desktop Safari'],
-      },
-    },
   ],
 });
