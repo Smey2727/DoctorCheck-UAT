@@ -111,7 +111,7 @@ function preservedRevision(file: any) {
     id: file.id, version: file.version, category: file.category,
     createdAt: file.createdAt, uploadedByUserId: file.uploadedByUserId,
     file: { id: file.file.id, originalName: file.file.originalName, sizeBytes: file.file.sizeBytes, objectKey: file.file.objectKey },
-    specification: file.specification,
+    specification: file.specification, 
   };
 }
 
