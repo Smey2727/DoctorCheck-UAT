@@ -18,11 +18,8 @@ export const USERS = {
 
 // Use the app's language control on the login and account settings pages.
 export async function selectEnglish(page: Page) {
-  const languageToggle = page.locator('button[lang][aria-label]');
-  await expect(languageToggle).toBeVisible();
-  if (await languageToggle.getAttribute('lang') === 'en') {
-    await page.getByRole('button', { name: 'Switch to English', exact: true }).click();
-  }
+  const languageSelect = page.getByRole('combobox', { name: 'Language', exact: true });
+  await languageSelect.selectOption('en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 }
 
@@ -33,7 +30,7 @@ export async function signIn(page: Page, email: string, password = PASSWORD) {
   await selectEnglish(page);
 
   // Enter the email or login ID
-  await page.getByRole('textbox', { name: 'Email or login ID*' }).fill(email);
+  await page.getByRole('textbox', { name: 'ID or email*', exact: true }).fill(email);
 
   // Password field (name changes between "Show password" and "Hide password", so match both)
   const passwordBox = page.getByRole('textbox', { name: /^Password\*/ });
@@ -58,7 +55,7 @@ export async function signIn(page: Page, email: string, password = PASSWORD) {
       && response.request().method() === 'POST'
       && response.request().postDataJSON()?.operationName === 'Login')
       .then(response => response.json()),
-    page.getByRole('button', { name: 'Sign in ->' }).click(),
+    page.getByRole('button', { name: 'Sign in', exact: true }).click(),
   ]);
   expect(loginBody.errors).toBeUndefined();
   const user = loginBody.data.login.user;

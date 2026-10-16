@@ -9,7 +9,7 @@ test('TC-HP-013: Repeated incorrect passwords show safe errors and correct login
   page.setDefaultTimeout(15_000);
   await page.goto(LOGIN_URL);
   await selectEnglish(page);
-  await page.getByRole('textbox', { name: 'Email or login ID*' }).fill(ACCOUNT);
+  await page.getByRole('textbox', { name: 'ID or email*' }).fill(ACCOUNT);
   const password = page.getByRole('textbox', { name: /^Password\*/ });
   const attempts: object[] = [];
   let invalidCredentialErrors = 0;
@@ -21,7 +21,7 @@ test('TC-HP-013: Repeated incorrect passwords show safe errors and correct login
       const [body] = await Promise.all([
         page.waitForResponse(r => r.url().endsWith('/graphql')
           && r.request().postDataJSON()?.operationName === 'Login').then(r => r.json()),
-        page.getByRole('button', { name: 'Sign in ->', exact: true }).click(),
+        page.getByRole('button', { name: 'Sign in', exact: true }).click(),
       ]);
       expect(body.errors?.length).toBeGreaterThan(0);
       expect(body.data?.login).toBeFalsy();
@@ -51,7 +51,7 @@ test('TC-HP-013: Repeated incorrect passwords show safe errors and correct login
     const [body] = await Promise.all([
       page.waitForResponse(r => r.url().endsWith('/graphql')
         && r.request().postDataJSON()?.operationName === 'Login').then(r => r.json()),
-      page.getByRole('button', { name: 'Sign in ->', exact: true }).click(),
+      page.getByRole('button', { name: 'Sign in', exact: true }).click(),
     ]);
     let correctPasswordResult: object;
     if (body.errors?.length) {

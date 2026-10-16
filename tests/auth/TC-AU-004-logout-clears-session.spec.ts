@@ -7,8 +7,8 @@ const REQUEST_PATH = `/partner/requests/${REQUEST_NO}`;
 
 async function expectLoggedOut(page: Page, patientCode: string) {
   await expect(page).toHaveURL(/\/login(?:\?|$)/);
-  await expect(page.getByRole('textbox', { name: 'Email or login ID*', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Sign in ->', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'ID or email*', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: REQUEST_NO, exact: true })).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText(patientCode);

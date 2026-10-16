@@ -5,13 +5,13 @@ import { selectEnglish, signIn, signOut, USERS } from '../helpers/auth';
 async function login(page: Page, loginId: string, password: string) {
   await page.goto('/login');
   await selectEnglish(page);
-  await page.getByRole('textbox', { name: 'Email or login ID*', exact: true }).fill(loginId);
+  await page.getByRole('textbox', { name: 'ID or email*', exact: true }).fill(loginId);
   await page.getByRole('textbox', { name: /^Password\*/ }).fill(password);
   const [body] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith('/graphql')
       && response.request().method() === 'POST'
       && response.request().postDataJSON()?.operationName === 'Login').then(response => response.json()),
-    page.getByRole('button', { name: 'Sign in ->', exact: true }).click(),
+    page.getByRole('button', { name: 'Sign in', exact: true }).click(),
   ]);
   return body;
 }
