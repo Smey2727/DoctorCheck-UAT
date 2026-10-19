@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { waitForGraphqlResponse } from '../helpers/graphql';
 import { signIn, USERS } from '../helpers/auth';
 
 // Seeded, previously submitted and billed UAT request. No invoice is created or edited.
@@ -7,21 +8,43 @@ const HOSPITAL = 'DoctorCheck Demo Hospital';
 
 async function requestSnapshot(page: Page) {
   const [body] = await Promise.all([
-    page.waitForResponse(r => r.url().endsWith('/graphql')
-      && r.request().postDataJSON()?.operationName === 'Request').then(r => r.json()),
+    waitForGraphqlResponse(page, 'Request').then((response) => response.json()),
     page.goto(`/manager/requests/${REQUEST}`),
   ]);
   expect(body.errors).toBeUndefined();
   const details = body.data.request.details;
-  expect(details).toMatchObject({ requestNo: REQUEST, product: 'Cranium', material: 'PEEK', priceSizeBucketLabel: 'Small' });
+  expect(details).toMatchObject({
+    requestNo: REQUEST,
+    product: 'Cranium',
+    material: 'PEEK',
+    priceSizeBucketLabel: 'Small',
+  });
   expect(details.priceBaseAmount).not.toBeNull();
   expect(details.quotedPrice).not.toBeNull();
-  await expect(page.getByRole('heading', { name: `Request ${REQUEST}`, exact: true })).toBeVisible();
-  const fields = ['priceBaseAmount', 'quotedPrice', 'priceCurrency', 'priceSizeBucketLabel',
-    'priceAdjustmentType', 'priceAdjustmentPercent', 'priceAdjustmentAmount', 'priceCalculatedAt', 'financialAgencyUserId'];
-  const data = Object.fromEntries(fields.map(key => [key, details[key]]));
-  const base = await page.getByRole('term').filter({ hasText: /^Base price$/ }).locator('xpath=following-sibling::dd[1]').allTextContents();
-  const quote = await page.getByRole('term').filter({ hasText: /^Calculated quote$/ }).locator('xpath=following-sibling::dd[1]').allTextContents();
+  await expect(
+    page.getByRole('heading', { name: `Request ${REQUEST}`, exact: true }),
+  ).toBeVisible();
+  const data = {
+    priceBaseAmount: details.priceBaseAmount,
+    quotedPrice: details.quotedPrice,
+    priceCurrency: details.priceCurrency,
+    priceSizeBucketLabel: details.priceSizeBucketLabel,
+    priceAdjustmentType: details.priceAdjustmentType,
+    priceAdjustmentPercent: details.priceAdjustmentPercent,
+    priceAdjustmentAmount: details.priceAdjustmentAmount,
+    priceCalculatedAt: details.priceCalculatedAt,
+    financialAgencyUserId: details.financialAgencyUserId,
+  };
+  const base = await page
+    .getByRole('term')
+    .filter({ hasText: /^Base price$/ })
+    .locator('xpath=following-sibling::dd[1]')
+    .allTextContents();
+  const quote = await page
+    .getByRole('term')
+    .filter({ hasText: /^Calculated quote$/ })
+    .locator('xpath=following-sibling::dd[1]')
+    .allTextContents();
   expect(base).toHaveLength(1);
   expect(quote.length).toBeGreaterThan(0);
   return { data, base, quote };
@@ -31,22 +54,38 @@ async function billSnapshot(page: Page) {
   await page.goto('/manager/billing');
   await page.getByRole('combobox', { name: 'Year', exact: true }).selectOption('2026');
   const [body] = await Promise.all([
-    page.waitForResponse(async r => {
-      if (!r.url().endsWith('/graphql') || r.request().postDataJSON()?.operationName !== 'BillingSummary') return false;
-      const b = await r.json();
-      return b.data?.billingSummary?.directPartnerGroups?.some((g: any) => g.requests.some((row: any) => row.requestNo === REQUEST));
-    }).then(r => r.json()),
+    page
+      .waitForResponse(async (r) => {
+        if (
+          !r.url().endsWith('/graphql') ||
+          r.request().postDataJSON()?.operationName !== 'BillingSummary'
+        ) {
+          return false;
+        }
+        const b = await r.json();
+        return b.data?.billingSummary?.directPartnerGroups?.some((g: any) =>
+          g.requests.some((row: any) => row.requestNo === REQUEST),
+        );
+      })
+      .then((response) => response.json()),
     page.getByRole('combobox', { name: 'Month', exact: true }).selectOption('9'),
   ]);
   expect(body.errors).toBeUndefined();
-  const group = body.data.billingSummary.directPartnerGroups.find((g: any) => g.billedToName === HOSPITAL);
+  const group = body.data.billingSummary.directPartnerGroups.find(
+    (g: any) => g.billedToName === HOSPITAL,
+  );
   const bill = group.requests.find((row: any) => row.requestNo === REQUEST);
   expect(bill.invoiceStatus).toBe('PAID');
   expect(Number(bill.amount)).toBeGreaterThan(0);
-  await page.getByRole('row').filter({ has: page.getByRole('cell', { name: HOSPITAL, exact: true }) })
+  await page
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name: HOSPITAL, exact: true }) })
     .filter({ has: page.getByRole('button', { name: 'Open', exact: true }) })
-    .getByRole('button', { name: 'Open', exact: true }).click();
-  const row = page.getByRole('row').filter({ has: page.getByRole('link', { name: REQUEST, exact: true }) });
+    .getByRole('button', { name: 'Open', exact: true })
+    .click();
+  const row = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('link', { name: REQUEST, exact: true }) });
   await expect(row).toBeVisible();
   return { bill, text: await row.innerText() };
 }
@@ -54,7 +93,9 @@ async function billSnapshot(page: Page) {
 async function priceInput(page: Page) {
   await page.goto('/manager/pricing');
   await expect(page.getByRole('heading', { name: 'Cranium / PEEK', exact: true })).toBeVisible();
-  return page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'Small', exact: true }) })
+  return page
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name: 'Small', exact: true }) })
     .getByRole('textbox', { name: 'New price', exact: true });
 }
 
@@ -62,7 +103,10 @@ async function savePrice(page: Page, value: string) {
   const input = await priceInput(page);
   await input.fill(value);
   await page.getByRole('button', { name: 'Save all', exact: true }).click();
-  const confirmation = page.getByRole('alertdialog', { name: 'Save pricing changes?', exact: true });
+  const confirmation = page.getByRole('alertdialog', {
+    name: 'Save pricing changes?',
+    exact: true,
+  });
   await confirmation.getByRole('button', { name: 'Save all changes', exact: true }).click();
   await expect(confirmation).toBeHidden();
   await expect(page.getByRole('button', { name: 'Save all', exact: true })).toBeDisabled();
@@ -92,7 +136,9 @@ test('TC-MG-004: Base price changes preserve an old request and its bill', async
   } finally {
     await test.step('Restore the original base price', async () => {
       const input = await priceInput(page);
-      if (await input.inputValue() !== original) await savePrice(page, original);
+      if ((await input.inputValue()) !== original) {
+        await savePrice(page, original);
+      }
       await expect(await priceInput(page)).toHaveValue(original);
     });
   }

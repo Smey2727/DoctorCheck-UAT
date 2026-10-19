@@ -5,7 +5,9 @@ import { signIn, signOut, USERS } from '../helpers/auth';
 // Surgery type (pick one, required), Fixation holes (required), Width 5-120 mm
 // Expected: fields shown on Partner form with required flag and limits
 
-test('TC-MG-002: Required request fields and width limits are available to partners', async ({ page }) => {
+test('TC-MG-002: Required request fields and width limits are available to partners', async ({
+  page,
+}) => {
   // Sign in as Hospital Partner and open New Request
   await signIn(page, USERS.hospital);
   await page.getByRole('link', { name: 'New Request', exact: true }).click();
@@ -18,7 +20,11 @@ test('TC-MG-002: Required request fields and width limits are available to partn
   // Verify Surgery type is required (* in label) with its choices
   const surgeryType = page.getByRole('combobox', { name: /^Surgery type\*/ });
   await expect(surgeryType).toBeEnabled();
-  await expect(surgeryType.locator('option')).toContainText(['Reconstruction', 'Cranioplasty', 'Revision']);
+  await expect(surgeryType.locator('option')).toContainText([
+    'Reconstruction',
+    'Cranioplasty',
+    'Revision',
+  ]);
 
   // Verify Fixation holes is required (* in label) with its choices
   const fixationHoles = page.getByRole('combobox', { name: /^Fixation holes \/ mounting\*/ });

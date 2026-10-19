@@ -7,7 +7,11 @@ import { createHospitalReworkRequest } from '../helpers/requests';
 // Open queue, click Start Review
 // Expected: request listed; status IN_REVIEW
 
-test('TC-CS-001: Counselor can claim a request and start review', async ({ page, browser, baseURL }) => {
+test('TC-CS-001: Counselor can claim a request and start review', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
   test.setTimeout(90_000);
   // Each run owns its request, so earlier runs cannot exhaust the available queue.
   const requestId = await test.step('Create a fresh unassigned hospital request', async () => {
@@ -15,7 +19,10 @@ test('TC-CS-001: Counselor can claim a request and start review', async ({ page,
     try {
       const hospitalPage = await hospitalContext.newPage();
       await signIn(hospitalPage, USERS.hospital);
-      return await createHospitalReworkRequest(hospitalPage, `TC-CS-001-${randomUUID().slice(0, 8)}`);
+      return await createHospitalReworkRequest(
+        hospitalPage,
+        `TC-CS-001-${randomUUID().slice(0, 8)}`,
+      );
     } finally {
       await hospitalContext.close();
     }
@@ -30,7 +37,8 @@ test('TC-CS-001: Counselor can claim a request and start review', async ({ page,
   await page.getByRole('searchbox', { name: /^Search request no\./ }).fill(requestId);
 
   // Only Submitted requests can start review.
-  await page.getByRole('combobox', { name: 'Status', exact: true })
+  await page
+    .getByRole('combobox', { name: 'Status', exact: true })
     .selectOption({ label: 'Submitted' });
 
   const requestRow = page.getByRole('row').filter({
@@ -47,15 +55,15 @@ test('TC-CS-001: Counselor can claim a request and start review', async ({ page,
   await expect(requestHeading).toBeVisible();
   // The current status shares the heading's parent; the state-flow list is separate.
   const requestHeader = requestHeading.locator('..');
-  await expect(requestHeader.getByRole('button', { name: 'Submitted', exact: true }))
-    .toBeVisible();
+  await expect(requestHeader.getByRole('button', { name: 'Submitted', exact: true })).toBeVisible();
 
   // Click "Start review" to open the inline confirmation panel.
   await page.getByRole('button', { name: 'Start review', exact: true }).click();
 
   // Enter a note for the status change
   const statusNote = page.getByRole('textbox', {
-    name: 'Optional note for the status history', exact: true,
+    name: 'Optional note for the status history',
+    exact: true,
   });
   await statusNote.fill('ok');
   const confirmationPanel = statusNote.locator('..');
@@ -65,8 +73,7 @@ test('TC-CS-001: Counselor can claim a request and start review', async ({ page,
   await expect(statusNote).toBeHidden();
 
   // Verify the status changed to In review
-  await expect(requestHeader.getByRole('button', { name: 'In review', exact: true }))
-    .toBeVisible();
+  await expect(requestHeader.getByRole('button', { name: 'In review', exact: true })).toBeVisible();
 
   // Sign out
   await signOut(page);

@@ -24,7 +24,11 @@ async function expectUnassigned(page: Page, requestId: string) {
 
 // Two independent requests and two different counselor accounts prevent a
 // shared login or an old assignment from masking queue isolation failures.
-test('TC-CS-011: Claiming one request preserves visibility of another unassigned request', async ({ page, browser, baseURL }) => {
+test('TC-CS-011: Claiming one request preserves visibility of another unassigned request', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
   test.setTimeout(90_000);
   const hospitalContext = await browser.newContext({ baseURL });
   const otherContext = await browser.newContext({ baseURL });
@@ -63,7 +67,9 @@ test('TC-CS-011: Claiming one request preserves visibility of another unassigned
       for (const counselorPage of [page, otherPage]) {
         await openQueue(counselorPage, caseCode);
         const claimed = requestRow(counselorPage, first);
-        await expect(claimed.getByRole('cell', { name: owner.displayName, exact: true })).toBeVisible();
+        await expect(
+          claimed.getByRole('cell', { name: owner.displayName, exact: true }),
+        ).toBeVisible();
         await expect(claimed.getByRole('cell', { name: 'Submitted', exact: true })).toBeVisible();
         await expectUnassigned(counselorPage, second);
       }

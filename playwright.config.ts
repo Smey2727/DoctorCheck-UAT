@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const isCI = Boolean(process.env.CI);
+
 export default defineConfig({
   // Location of test files
   testDir: './tests',
@@ -8,21 +10,17 @@ export default defineConfig({
   fullyParallel: true,
 
   // Fail if test.only is accidentally committed
-  forbidOnly: !!process.env.CI,
+  forbidOnly: isCI,
 
   // Retry failed tests on CI/Jenkins
-  retries: process.env.CI ? 2 : 0,
+  retries: isCI ? 2 : 0,
 
-  // Use 2 workers on CI/Jenkins
-  workers: process.env.CI ? 4 : undefined,
+  // Use 4 workers on Jenkins; Playwright chooses the local worker count.
+  workers: isCI ? 4 : undefined,
 
   // Test reporters
-  reporter: process.env.CI
-    ? [
-        ['list'],
-        ['html', { open: 'never' }],
-        ['junit', { outputFile: 'test-results/junit.xml' }],
-      ]
+  reporter: isCI
+    ? [['list'], ['html', { open: 'never' }], ['junit', { outputFile: 'test-results/junit.xml' }]]
     : 'html',
 
   // Shared settings for all tests
@@ -60,6 +58,5 @@ export default defineConfig({
         ...devices['Desktop Firefox'],
       },
     },
-
   ],
 });

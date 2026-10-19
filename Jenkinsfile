@@ -22,13 +22,19 @@ pipeline {
 
         stage('Install Playwright Browsers') {
             steps {
-                bat 'npx playwright install chromium firefox webkit'
+                bat 'npx playwright install chromium firefox'
+            }
+        }
+
+        stage('Check Code') {
+            steps {
+                bat 'npm run check'
             }
         }
 
         stage('Run Playwright Tests') {
             steps {
-                bat 'npx playwright test'
+                bat 'npm test'
             }
         }
     }

@@ -1,15 +1,27 @@
 {
   "name": "doctorcheck-uat",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {},
+  "description": "DoctorCheck user acceptance tests with Playwright",
+  "scripts": {
+    "test": "playwright test",
+    "test:chromium": "playwright test --project=chromium",
+    "test:firefox": "playwright test --project=firefox",
+    "test:ui": "playwright test --ui",
+    "test:list": "playwright test --list",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"tests/**/*.ts\" playwright.config.ts package.json tsconfig.json .prettierrc.json README.md scripts/uat-results-data.json",
+    "format:check": "prettier --check \"tests/**/*.ts\" playwright.config.ts package.json tsconfig.json .prettierrc.json README.md scripts/uat-results-data.json",
+    "check": "npm run typecheck && npm run format:check"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
     "@playwright/test": "^1.63.0",
-    "@types/node": "^26.6.4"
+    "@types/node": "^26.6.4",
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2"
   }
 }

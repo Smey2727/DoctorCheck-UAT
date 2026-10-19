@@ -39,7 +39,10 @@ test('TC-MG-001: Cranium PBH PEEK setup is active and available to partners', as
   await expect(page.getByRole('textbox', { name: 'Display name*' })).toHaveValue('PBH - PEEK');
 
   // Verify the detail type is Active
-  await expect(page.getByRole('button', { name: 'Active', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Active', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
 
   // Sign out Manager
   await signOut(page);

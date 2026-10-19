@@ -1,9 +1,13 @@
 import { expect, Page, test } from '@playwright/test';
+import { waitForGraphqlResponse } from '../helpers/graphql';
 import { signIn, USERS } from '../helpers/auth';
 
 // Separate browser processes and contexts have independent authentication storage.
 // The expected behavior supplied in the UAT case is that both sessions stay active.
-test('TC-MG-020: The same Manager account remains functional in two independent browsers', async ({ browser, baseURL }) => {
+test('TC-MG-020: The same Manager account remains functional in two independent browsers', async ({
+  browser,
+  baseURL,
+}) => {
   test.setTimeout(90_000);
   const firstContext = await browser.newContext({ baseURL });
   const secondBrowser = await browser.browserType().launch({ headless: true });
@@ -14,8 +18,7 @@ test('TC-MG-020: The same Manager account remains functional in two independent 
 
   async function verifyProtectedList(page: Page, session: string, reload = false) {
     const [response] = await Promise.all([
-      page.waitForResponse(r => r.url().endsWith('/graphql')
-        && r.request().postDataJSON()?.operationName === 'Requests'),
+      waitForGraphqlResponse(page, 'Requests'),
       reload ? page.reload() : page.goto('/manager/requests'),
     ]);
     expect(response.ok(), `${session}: protected request-list API must succeed`).toBe(true);
@@ -27,8 +30,12 @@ test('TC-MG-020: The same Manager account remains functional in two independent 
     await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     const firstRequest = body.data.requests.items[0].requestNo;
     await expect(page.getByRole('cell', { name: firstRequest, exact: true })).toBeVisible();
-    results.push({ session, action: reload ? 'reload' : 'open protected list', authenticated: true,
-      returnedRequests: body.data.requests.items.length });
+    results.push({
+      session,
+      action: reload ? 'reload' : 'open protected list',
+      authenticated: true,
+      returnedRequests: body.data.requests.items.length,
+    });
   }
 
   try {
@@ -60,15 +67,36 @@ test('TC-MG-020: The same Manager account remains functional in two independent 
         verifyProtectedList(first, 'Browser 1'),
         verifyProtectedList(second, 'Browser 2'),
       ]);
-      await test.info().attach('browser-1-still-active', { body: await first.screenshot(), contentType: 'image/png' });
-      await test.info().attach('browser-2-still-active', { body: await second.screenshot(), contentType: 'image/png' });
+      await test.info().attach('browser-1-still-active', {
+        body: await first.screenshot(),
+        contentType: 'image/png',
+      });
+      await test.info().attach('browser-2-still-active', {
+        body: await second.screenshot(),
+        contentType: 'image/png',
+      });
     });
     await test.info().attach('concurrent-login-results', {
-      body: JSON.stringify({ account: USERS.manager, independentBrowserProcesses: 2,
-        observedBehavior: 'Both sessions remain authenticated and functional', results }, null, 2),
+      body: JSON.stringify(
+        {
+          account: USERS.manager,
+          independentBrowserProcesses: 2,
+          observedBehavior: 'Both sessions remain authenticated and functional',
+          results,
+        },
+        null,
+        2,
+      ),
       contentType: 'application/json',
     });
-    console.log(JSON.stringify({ independentBrowserProcesses: 2, bothSessionsActive: true, protectedDataChecks: results.length, result: 'PASSED' }));
+    console.log(
+      JSON.stringify({
+        independentBrowserProcesses: 2,
+        bothSessionsActive: true,
+        protectedDataChecks: results.length,
+        result: 'PASSED',
+      }),
+    );
   } finally {
     await firstContext.close();
     await secondContext.close();

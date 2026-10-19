@@ -20,31 +20,43 @@ function requestHeader(page: Page, requestId: string) {
 
 function submissionRound(page: Page, round: number) {
   // The enclosing workbench is also a section; use the heading's nearest section.
-  return page.getByRole('heading', { name: `Round ${round}`, exact: true })
+  return page
+    .getByRole('heading', { name: `Round ${round}`, exact: true })
     .locator('xpath=ancestor::section[1]');
 }
 
 function billingAccount(page: Page) {
-  return page.getByRole('term').filter({ hasText: /^Billing account$/ })
-    .locator('..').getByRole('definition');
+  return page
+    .getByRole('term')
+    .filter({ hasText: /^Billing account$/ })
+    .locator('..')
+    .getByRole('definition');
 }
 
 async function startReview(page: Page, requestId: string, note: string) {
   await page.getByRole('button', { name: 'Start review', exact: true }).click();
   const statusNote = page.getByRole('textbox', {
-    name: 'Optional note for the status history', exact: true,
+    name: 'Optional note for the status history',
+    exact: true,
   });
   await statusNote.fill(note);
   await statusNote.locator('..').getByRole('button', { name: 'Start review', exact: true }).click();
   await expect(statusNote).toBeHidden();
-  await expect(requestHeader(page, requestId).getByRole('button', {
-    name: 'In review', exact: true,
-  })).toBeVisible();
+  await expect(
+    requestHeader(page, requestId).getByRole('button', {
+      name: 'In review',
+      exact: true,
+    }),
+  ).toBeVisible();
 }
 
 // TC-CS-003: Resubmission creates a new review round while preserving old records.
 // Uses a fresh hospital-owned case; does not depend on TC-CS-001 or TC-CS-002.
-test('TC-CS-003: Counselor can re-review a resubmission while preserving Round 1 and billing', async ({ page, browser, baseURL }) => {
+test('TC-CS-003: Counselor can re-review a resubmission while preserving Round 1 and billing', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
   test.setTimeout(120_000);
   const hospitalContext = await browser.newContext({ baseURL });
   try {
@@ -75,12 +87,16 @@ test('TC-CS-003: Counselor can re-review a resubmission while preserving Round 1
 
     await test.step('Request corrections from the hospital', async () => {
       await page.getByRole('button', { name: 'Request rework', exact: true }).click();
-      await page.getByRole('textbox', { name: 'Explain what the partner needs to fix', exact: true })
+      await page
+        .getByRole('textbox', { name: 'Explain what the partner needs to fix', exact: true })
         .fill(`${caseCode}: Replace the CT placeholder and update the case description.`);
       await page.getByRole('button', { name: 'Send rework request', exact: true }).click();
-      await expect(requestHeader(page, requestId).getByRole('button', {
-        name: 'Rework requested', exact: true,
-      })).toBeVisible();
+      await expect(
+        requestHeader(page, requestId).getByRole('button', {
+          name: 'Rework requested',
+          exact: true,
+        }),
+      ).toBeVisible();
     });
 
     await page.getByRole('button', { name: /^Submission(?:,|$)/ }).click();
@@ -97,20 +113,33 @@ test('TC-CS-003: Counselor can re-review a resubmission while preserving Round 1
       await hospitalPage.getByRole('link', { name: 'Fix & resubmit', exact: true }).click();
       const agency = hospitalPage.getByRole('status', { name: 'Financial agency', exact: true });
       await expect(agency).toHaveText(originalBilling);
-      await expect(hospitalPage.getByRole('combobox', { name: /Financial agency|Billing account/i })).toHaveCount(0);
-      await hospitalPage.getByRole('textbox', { name: 'Case description', exact: true })
+      await expect(
+        hospitalPage.getByRole('combobox', { name: /Financial agency|Billing account/i }),
+      ).toHaveCount(0);
+      await hospitalPage
+        .getByRole('textbox', { name: 'Case description', exact: true })
         .fill(`${caseCode}: Updated synthetic case details for Round 2. No patient data.`);
       await hospitalPage.locator('input[type="file"][accept*=".dcm"]').setInputFiles(roundTwoFile);
-      await expect(hospitalPage.getByText(roundTwoFile.name, { exact: true }).first()).toBeVisible();
+      await expect(
+        hospitalPage.getByText(roundTwoFile.name, { exact: true }).first(),
+      ).toBeVisible();
       await expect(agency).toHaveText(originalBilling);
-      await hospitalPage.getByRole('button', { name: 'Resubmit request', exact: true }).first().click();
+      await hospitalPage
+        .getByRole('button', { name: 'Resubmit request', exact: true })
+        .first()
+        .click();
       const confirmation = hospitalPage.getByRole('alertdialog');
-      await confirmation.getByRole('checkbox', { name: /^I reviewed the case details and files/ }).check();
+      await confirmation
+        .getByRole('checkbox', { name: /^I reviewed the case details and files/ })
+        .check();
       await confirmation.getByRole('button', { name: 'Resubmit request', exact: true }).click();
       await expect(hospitalPage).toHaveURL(new RegExp(`/partner/requests/${requestId}$`));
-      await expect(requestHeader(hospitalPage, requestId).getByRole('button', {
-        name: 'Submitted', exact: true,
-      })).toBeVisible();
+      await expect(
+        requestHeader(hospitalPage, requestId).getByRole('button', {
+          name: 'Submitted',
+          exact: true,
+        }),
+      ).toBeVisible();
       await expect(billingAccount(hospitalPage)).toHaveText(originalBilling);
       await hospitalPage.close();
     });

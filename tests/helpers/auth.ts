@@ -1,4 +1,5 @@
 import { Page, expect } from '@playwright/test';
+import { waitForGraphqlResponse } from './graphql';
 
 // Login page URL
 export const LOGIN_URL = 'https://doctorcheck.saerosoft.com/login';
@@ -51,18 +52,16 @@ export async function signIn(page: Page, email: string, password = PASSWORD) {
 
   // Read the login body before any subsequent full-page navigation can discard it.
   const [loginBody] = await Promise.all([
-    page.waitForResponse(response => response.url().endsWith('/graphql')
-      && response.request().method() === 'POST'
-      && response.request().postDataJSON()?.operationName === 'Login')
-      .then(response => response.json()),
+    waitForGraphqlResponse(page, 'Login').then((response) => response.json()),
     page.getByRole('button', { name: 'Sign in', exact: true }).click(),
   ]);
   expect(loginBody.errors).toBeUndefined();
   const user = loginBody.data.login.user;
 
   // Verify the user left the login page.
-  await expect(page, `Login did not complete for ${email}`)
-    .not.toHaveURL(/\/login/, { timeout: 15000 });
+  await expect(page, `Login did not complete for ${email}`).not.toHaveURL(/\/login/, {
+    timeout: 15000,
+  });
 
   // The saved account language can override the login page language.
   const landingUrl = page.url();

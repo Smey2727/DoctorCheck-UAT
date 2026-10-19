@@ -5,7 +5,11 @@ import { createHospitalReworkRequest } from '../helpers/requests';
 
 // TC-CS-014: Request rework. A fresh hospital request must transition to
 // Rework requested (SUPPLEMENT_REQUESTED), and its owner must receive the reason.
-test('TC-CS-014: Hospital sees the exact rework reason on the request and notification', async ({ page, browser, baseURL }) => {
+test('TC-CS-014: Hospital sees the exact rework reason on the request and notification', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
   test.setTimeout(90_000);
   // Keep the hospital and counselor sessions isolated.
   const hospitalContext = await browser.newContext({ baseURL });
@@ -33,17 +37,28 @@ test('TC-CS-014: Hospital sees the exact rework reason on the request and notifi
     await expect(heading).toBeVisible();
     const header = heading.locator('..');
     await page.getByRole('button', { name: 'Start review', exact: true }).click();
-    const statusNote = page.getByRole('textbox', { name: 'Optional note for the status history', exact: true });
+    const statusNote = page.getByRole('textbox', {
+      name: 'Optional note for the status history',
+      exact: true,
+    });
     await statusNote.fill(`Reviewing ${caseCode}`);
-    await statusNote.locator('..').getByRole('button', { name: 'Start review', exact: true }).click();
+    await statusNote
+      .locator('..')
+      .getByRole('button', { name: 'Start review', exact: true })
+      .click();
     await expect(header.getByRole('button', { name: 'In review', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Request rework', exact: true }).click();
-    const reasonInput = page.getByRole('textbox', { name: 'Explain what the partner needs to fix', exact: true });
+    const reasonInput = page.getByRole('textbox', {
+      name: 'Explain what the partner needs to fix',
+      exact: true,
+    });
     await reasonInput.fill(reason);
     await page.getByRole('button', { name: 'Send rework request', exact: true }).click();
     await expect(reasonInput).toBeHidden();
-    await expect(header.getByRole('button', { name: 'Rework requested', exact: true })).toBeVisible();
+    await expect(
+      header.getByRole('button', { name: 'Rework requested', exact: true }),
+    ).toBeVisible();
 
     await hospitalPage.close();
     const partnerPage = await hospitalContext.newPage();
@@ -54,11 +69,16 @@ test('TC-CS-014: Hospital sees the exact rework reason on the request and notifi
     await expect(partnerPage.getByText(reason, { exact: true })).toBeVisible();
     await partnerPage.goto('/notifications');
     const notification = partnerPage.getByRole('article').filter({
-      has: partnerPage.getByRole('heading', { name: `Supplement requested for ${requestId}`, exact: true }),
+      has: partnerPage.getByRole('heading', {
+        name: `Supplement requested for ${requestId}`,
+        exact: true,
+      }),
     });
     await expect(notification).toHaveCount(1);
     await expect(notification.getByText(reason, { exact: true })).toBeVisible();
-    await expect(notification.getByRole('button', { name: 'Update and resubmit', exact: true })).toBeVisible();
+    await expect(
+      notification.getByRole('button', { name: 'Update and resubmit', exact: true }),
+    ).toBeVisible();
   } finally {
     await hospitalContext.close();
   }

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, Page, test } from '@playwright/test';
+import { waitForGraphqlResponse } from '../../helpers/graphql';
 import { signIn, USERS } from '../../helpers/auth';
 
 // Synthetic Hospital C case shared by TC-HP-016; no file upload is needed.
@@ -7,8 +8,7 @@ const REQUEST = 'REQ-2026-0730';
 
 async function loadRequest(page: Page, role: 'partner' | 'counselor') {
   const [body] = await Promise.all([
-    page.waitForResponse(r => r.url().endsWith('/graphql')
-      && r.request().postDataJSON()?.operationName === 'Request').then(r => r.json()),
+    waitForGraphqlResponse(page, 'Request').then((response) => response.json()),
     page.goto(`/${role}/requests/${REQUEST}`),
   ]);
   expect(body.errors).toBeUndefined();
@@ -16,7 +16,11 @@ async function loadRequest(page: Page, role: 'partner' | 'counselor') {
   return body.data.request.details;
 }
 
-test('TC-HP-021: Hospital design comment reaches Counselor with author and time without changing status', async ({ page, browser, baseURL }) => {
+test('TC-HP-021: Hospital design comment reaches Counselor with author and time without changing status', async ({
+  page,
+  browser,
+  baseURL,
+}) => {
   test.setTimeout(90_000);
   page.setDefaultTimeout(15_000);
   const counselorContext = await browser.newContext({ baseURL });
@@ -30,15 +34,25 @@ test('TC-HP-021: Hospital design comment reaches Counselor with author and time 
     const comment = `TC-HP-021-${randomUUID().slice(0, 8)}: Please verify the shared design edge fit. Synthetic Hospital feedback.`;
     await page.getByRole('textbox', { name: 'Write a comment...', exact: true }).fill(comment);
     const [created] = await Promise.all([
-      page.waitForResponse(r => r.url().endsWith('/graphql')
-        && /mutation/.test(r.request().postDataJSON()?.query ?? '')).then(r => r.json()),
+      page
+        .waitForResponse(
+          (r) =>
+            r.url().endsWith('/graphql') &&
+            /mutation/.test(r.request().postDataJSON()?.query ?? ''),
+        )
+        .then((response) => response.json()),
       page.getByRole('button', { name: 'Send', exact: true }).click(),
     ]);
     expect(created.errors).toBeUndefined();
     await expect(page.getByText(comment, { exact: true })).toBeVisible();
     const savedComment = created.data.addModelComment;
-    expect(savedComment).toMatchObject({ requestId: before.id, body: comment,
-      authorUserId: hospital.id, authorRole: 'PARTNER', visibility: 'SHARED' });
+    expect(savedComment).toMatchObject({
+      requestId: before.id,
+      body: comment,
+      authorUserId: hospital.id,
+      authorRole: 'PARTNER',
+      visibility: 'SHARED',
+    });
     expect(Number.isNaN(Date.parse(savedComment.createdAt))).toBe(false);
     const after = await loadRequest(page, 'partner');
     expect(after.status).toBe('REVIEW_REQUESTED');
@@ -51,17 +65,33 @@ test('TC-HP-021: Hospital design comment reaches Counselor with author and time 
     await expect(counselor.getByText(comment, { exact: true })).toBeVisible();
     const card = counselor.getByText(comment, { exact: true }).locator('..');
     await expect(card.getByText('Partner', { exact: true })).toBeVisible();
-    const expectedTime = await counselor.evaluate(iso => new Date(iso).toLocaleString('en-US'), savedComment.createdAt);
+    const expectedTime = await counselor.evaluate(
+      (iso) => new Date(iso).toLocaleString('en-US'),
+      savedComment.createdAt,
+    );
     await expect(card.locator('time')).toHaveText(expectedTime);
-    const result = { requestId: REQUEST, comment, authorLabel: 'Partner',
-      savedAuthor: hospital.displayName, savedAuthorIdMatchesHospital: true,
-      displayedTime: await card.locator('time').innerText(), createdAt: savedComment.createdAt,
-      counselorCanSeeComment: true, status: 'REVIEW_REQUESTED' };
-    await test.info().attach('counselor-sees-design-comment', { body: await counselor.screenshot(), contentType: 'image/png' });
+    const result = {
+      requestId: REQUEST,
+      comment,
+      authorLabel: 'Partner',
+      savedAuthor: hospital.displayName,
+      savedAuthorIdMatchesHospital: true,
+      displayedTime: await card.locator('time').innerText(),
+      createdAt: savedComment.createdAt,
+      counselorCanSeeComment: true,
+      status: 'REVIEW_REQUESTED',
+    };
+    await test.info().attach('counselor-sees-design-comment', {
+      body: await counselor.screenshot(),
+      contentType: 'image/png',
+    });
     const persisted = await loadRequest(counselor, 'counselor');
     expect(persisted.status).toBe('REVIEW_REQUESTED');
     expect(persisted.statusHistory).toEqual(before.statusHistory);
-    await test.info().attach('comment-visibility-results', { body: JSON.stringify(result, null, 2), contentType: 'application/json' });
+    await test.info().attach('comment-visibility-results', {
+      body: JSON.stringify(result, null, 2),
+      contentType: 'application/json',
+    });
     test.info().annotations.push({ type: 'request', description: REQUEST });
     console.log(JSON.stringify(result));
   } finally {
