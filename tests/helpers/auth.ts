@@ -1,8 +1,8 @@
 import { Page, expect } from '@playwright/test';
 import { waitForGraphqlResponse } from './graphql';
 
-// Login page URL
-export const LOGIN_URL = 'https://doctorcheck.saerosoft.com/login';
+// Resolve login against the same baseURL as the rest of the test.
+export const LOGIN_URL = '/login';
 
 // Same password for all roles
 export const PASSWORD = 'doctorcheck123';

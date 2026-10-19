@@ -25,8 +25,8 @@ export default defineConfig({
 
   // Shared settings for all tests
   use: {
-    // Deployed DoctorCheck application
-    baseURL: 'https://doctorcheck.saerosoft.com',
+    // Set BASE_URL to test a staging deployment instead of the default site.
+    baseURL: process.env.BASE_URL || 'https://doctorcheck.saerosoft.com',
 
     // Run browsers without opening them
     headless: true,

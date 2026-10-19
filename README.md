@@ -4,6 +4,16 @@ This project uses Playwright and TypeScript to check DoctorCheck in a browser.
 Each `*.spec.ts` file describes a user scenario and checks the expected result.
 The configured application is `https://doctorcheck.saerosoft.com`.
 
+To test a different deployment, set `BASE_URL` before running Playwright:
+
+```powershell
+$env:BASE_URL = 'https://your-staging-host'
+npm run test:chromium -- tests/auth/TC-AU-004-logout-clears-session.spec.ts
+```
+
+Login and other navigation use this same URL. Run `Remove-Item Env:BASE_URL` to return
+to the default site.
+
 ## First run
 
 Install Node.js and npm, then run these commands from the project folder:
