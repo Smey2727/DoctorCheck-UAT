@@ -44,7 +44,7 @@ test('TC-CS-001: Counselor can claim a request and start review', async ({
   const requestRow = page.getByRole('row').filter({
     has: page.getByRole('cell', { name: requestId, exact: true }),
   });
-  await expect(requestRow.getByRole('cell', { name: 'Submitted', exact: true })).toBeVisible();
+  await expect(requestRow.getByRole('button', { name: 'Submitted', exact: true })).toBeVisible();
   await expect(requestRow.getByRole('cell', { name: 'Unassigned', exact: true })).toBeVisible();
   const claimButton = requestRow.getByRole('button', { name: 'Claim', exact: true });
   await claimButton.click();

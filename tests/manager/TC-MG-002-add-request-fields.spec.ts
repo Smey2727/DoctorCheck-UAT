@@ -19,11 +19,8 @@ test('TC-MG-002: Current required request fields validate before submission', as
     await expect(page.getByRole('textbox', { name, exact: true })).toBeVisible();
     await expect(page.getByRole('textbox', { name, exact: true })).toBeEditable();
   }
-  await expect(
-    page.getByRole('combobox', { name: 'Material*', exact: true }).locator('option:checked'),
-  ).toHaveText('PEEK');
-  await expect(page.getByRole('combobox', { name: 'Product*', exact: true })).toHaveValue(
-    'Cranial',
+  await expect(page.getByRole('button', { name: 'Product', exact: true })).toHaveText(
+    'PEEK · Cranial',
   );
   const patient = page.getByRole('textbox', { name: /^Patient name\*/ });
   await expect(patient).toHaveValue(patientName);

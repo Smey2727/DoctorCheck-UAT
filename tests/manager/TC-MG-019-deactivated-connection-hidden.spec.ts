@@ -9,6 +9,7 @@ test('TC-MG-019: Deactivated agency is hidden and a replacement connection is as
   baseURL,
 }) => {
   test.setTimeout(120_000);
+  const startedAt = Date.now();
   page.setDefaultTimeout(15_000);
   await signIn(page, USERS.manager);
   async function agencyRecord(name = 'Agency B') {
@@ -47,6 +48,7 @@ test('TC-MG-019: Deactivated agency is hidden and a replacement connection is as
   expect(replacementMember.active).toBe(false);
   async function activate(agencyUserId: string, policy: any) {
     const response = await page.request.post(original.endpoint, {
+      timeout: 30_000,
       headers: { authorization: original.authorization, 'content-type': 'application/json' },
       data: {
         operationName: 'AddAgencyMember',
@@ -150,7 +152,9 @@ test('TC-MG-019: Deactivated agency is hidden and a replacement connection is as
       evidence.requestAfter = after;
     });
   } finally {
-    test.setTimeout(test.info().timeout + 30_000);
+    // Reserve cleanup time even when a slow call or machine suspension used up
+    // the original budget. Never leave this shared connection deactivated.
+    test.setTimeout(Math.max(test.info().timeout, Date.now() - startedAt) + 60_000);
     try {
       if (replacementActivated) {
         const current = (await agencyRecord('Agency A')).agency;
@@ -180,6 +184,7 @@ test('TC-MG-019: Deactivated agency is hidden and a replacement connection is as
       }
       if (restore) {
         const response = await page.request.post(original.endpoint, {
+          timeout: 30_000,
           headers: { authorization: original.authorization, 'content-type': 'application/json' },
           data: {
             operationName: 'AddAgencyMember',

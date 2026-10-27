@@ -77,7 +77,7 @@ test('TC-CS-003: Counselor can re-review a resubmission while preserving Round 1
       const row = page.getByRole('row').filter({
         has: page.getByRole('cell', { name: requestId, exact: true }),
       });
-      await expect(row.getByRole('cell', { name: 'Submitted', exact: true })).toBeVisible();
+      await expect(row.getByRole('button', { name: 'Submitted', exact: true })).toBeVisible();
       const claim = row.getByRole('button', { name: 'Claim', exact: true });
       await claim.click();
       await expect(claim).toBeHidden();
@@ -150,7 +150,7 @@ test('TC-CS-003: Counselor can re-review a resubmission while preserving Round 1
       const row = page.getByRole('row').filter({
         has: page.getByRole('cell', { name: requestId, exact: true }),
       });
-      await expect(row.getByRole('cell', { name: 'Submitted', exact: true })).toBeVisible();
+      await expect(row.getByRole('button', { name: 'Submitted', exact: true })).toBeVisible();
       await row.getByRole('link', { name: 'Open', exact: true }).click();
       await startReview(page, requestId, `${caseCode}: re-review Round 2`);
     });

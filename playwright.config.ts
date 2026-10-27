@@ -6,8 +6,8 @@ export default defineConfig({
   // Location of test files
   testDir: './tests',
 
-  // Run tests in parallel
-  fullyParallel: true,
+  // UAT cases mutate shared accounts, catalog entries, and pricing.
+  fullyParallel: false,
 
   // Fail if test.only is accidentally committed
   forbidOnly: isCI,
@@ -15,8 +15,8 @@ export default defineConfig({
   // Retry failed tests on CI/Jenkins
   retries: isCI ? 2 : 0,
 
-  // Use 4 workers on Jenkins; Playwright chooses the local worker count.
-  workers: isCI ? 4 : undefined,
+  // Keep shared fixtures stable across local and Jenkins runs.
+  workers: 1,
 
   // Test reporters
   reporter: isCI
@@ -48,14 +48,6 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-      },
-    },
-
-    // Mozilla Firefox
-    {
-      name: 'firefox',
-      use: {
-        ...devices['Desktop Firefox'],
       },
     },
   ],

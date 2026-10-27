@@ -90,7 +90,7 @@ async function collectQueue(page: Page, first: QueuePage, hospitalId?: string) {
       const row = page
         .getByRole('row')
         .filter({ has: page.getByRole('cell', { name: item.requestNo, exact: true }) });
-      await expect(row.getByRole('cell', { name: 'Submitted', exact: true })).toBeVisible();
+      await expect(row.getByRole('button', { name: 'Submitted', exact: true })).toBeVisible();
       expected.push(item);
     }
     const next = page.getByRole('button', { name: 'Next', exact: true });

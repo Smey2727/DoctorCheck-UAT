@@ -227,6 +227,7 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
           partnerPage.goto('/notifications'),
         ]);
         expect(notificationsBody.errors).toBeUndefined();
+        await expect(partnerPage.getByText('Loading notifications', { exact: true })).toBeHidden();
         const shipmentNotice = notificationsBody.data.notifications.find(
           (entry: { title: string }) => entry.title === 'Shipment dispatched',
         );
@@ -252,7 +253,13 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
           body: await partnerPage.screenshot(),
           contentType: 'image/png',
         });
-        await notification.getByRole('button', { name: 'Open request', exact: true }).click();
+        const [opened] = await Promise.all([
+          waitForGraphqlResponse(partnerPage, 'MarkNotificationRead').then((response) =>
+            response.json(),
+          ),
+          notification.getByRole('button', { name: 'Open request', exact: true }).click(),
+        ]);
+        expect(opened.errors).toBeUndefined();
         await expect(partnerPage).toHaveURL(new RegExp(`/partner/requests/${requestId}$`), {
           timeout: 15_000,
         });

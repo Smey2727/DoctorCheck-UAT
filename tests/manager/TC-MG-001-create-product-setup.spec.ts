@@ -30,16 +30,12 @@ test('TC-MG-001: Cranial PEEK setup is active and available to partners', async 
 
   await signIn(page, USERS.hospital);
   await page.getByRole('link', { name: 'New Request', exact: true }).click();
-  await page
-    .getByRole('combobox', { name: 'Material*', exact: true })
-    .selectOption({ label: 'PEEK' });
-  const product = page.getByRole('combobox', { name: 'Product*', exact: true });
-  await product.click();
-  const offered = page
-    .getByRole('listbox', { name: 'Product', exact: true })
-    .getByRole('option', { name: 'Cranial Cranial · Cranium - PEEK', exact: true });
+  const product = page.getByRole('button', { name: 'Product', exact: true });
+  await expect(product).toBeVisible();
+  if ((await product.getAttribute('aria-expanded')) !== 'true') await product.click();
+  const offered = page.getByRole('button', { name: 'Cranial Cranium - PEEK', exact: true });
   await expect(offered).toBeVisible();
   await offered.click();
-  await expect(product).toHaveValue('Cranial');
+  await expect(product).toHaveText('PEEK · Cranial');
   await clearSession(page);
 });

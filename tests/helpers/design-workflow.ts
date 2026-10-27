@@ -1,6 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { waitForGraphqlResponse } from './graphql';
 import { syntheticModel } from './synthetic-model';
+import { waitForUpload } from './uploads';
 
 // Read the current status beside the request heading, not the history list.
 export function requestStatus(page: Page, requestId: string, name: string) {
@@ -44,6 +45,9 @@ export async function uploadDesign(
   await dialog.getByRole('spinbutton', { name: 'Thickness (mm)*', exact: true }).fill(String(size));
   const designName = `${caseCode}-design-v${version}.stl`;
   await dialog.locator('input[type="file"]').setInputFiles(syntheticModel(designName, size));
+  await waitForUpload(page, () =>
+    dialog.getByRole('button', { name: 'Upload design result', exact: true }).isEnabled(),
+  );
   const [response] = await Promise.all([
     waitForGraphqlResponse(page, 'RegisterDesignFile'),
     dialog.getByRole('button', { name: 'Upload design result', exact: true }).click(),

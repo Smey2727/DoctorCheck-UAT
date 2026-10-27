@@ -1,5 +1,6 @@
 import { expect, Page } from '@playwright/test';
 import { waitForGraphqlResponse } from './graphql';
+import { waitForUpload } from './uploads';
 
 // Valid ZIP containing README.txt: synthetic UAT data, no clinical images.
 // Embed the small archive so local runs and CI do not need a binary fixture file.
@@ -81,6 +82,12 @@ export async function prepareHospitalReworkRequest(
   if (ctFile) {
     await page.locator('input[type="file"][accept*=".dcm"]').setInputFiles(ctFile);
     await expect(page.getByText(ctFile.name, { exact: true }).first()).toBeVisible();
+    await waitForUpload(page, () =>
+      page
+        .getByRole('group', { name: 'CT file', exact: true })
+        .getByText(`Uploaded: ${ctFile.name}`, { exact: true })
+        .isVisible(),
+    );
   }
 }
 

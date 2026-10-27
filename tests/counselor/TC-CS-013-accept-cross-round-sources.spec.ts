@@ -50,7 +50,7 @@ test('TC-CS-013: Counselor accepts CT from Round 1 and ETC from Round 2 without 
       const row = page.getByRole('row').filter({
         has: page.getByRole('cell', { name: requestId, exact: true }),
       });
-      await expect(row.getByRole('cell', { name: 'Submitted', exact: true })).toBeVisible();
+      await expect(row.getByRole('button', { name: 'Submitted', exact: true })).toBeVisible();
       const claim = row.getByRole('button', { name: 'Claim', exact: true });
       await claim.click();
       await expect(claim).toBeHidden();

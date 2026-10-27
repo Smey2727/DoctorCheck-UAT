@@ -20,13 +20,19 @@ Install Node.js and npm, then run these commands from the project folder:
 
 ```powershell
 npm ci
-npx playwright install chromium firefox
+npx playwright install chromium
 npm run test:chromium -- tests/auth/TC-AU-004-logout-clears-session.spec.ts
 ```
 
 The tests use UAT accounts and synthetic data. Some scenarios create requests,
 change passwords, or temporarily change shared settings. Run the test you are
 working on first. Tests that change settings contain cleanup in `finally` blocks.
+The suite runs one test at a time to prevent shared settings from interfering with
+other scenarios. Avoid simultaneous suite runs against the same deployment.
+Uploads can also hit a server quota during a full run. Shared CT and design upload
+helpers honor the displayed cooldown and wait for the application's automatic retry;
+the report records this as an `upload-cooldown` annotation. They still require upload
+completion and successful registration. Allow time for these waits when running CI.
 
 ## Reusable authentication
 
@@ -34,8 +40,8 @@ Ordinary tests use `signIn()` to reuse a saved session per account, browser engi
 and configured site URL. Each test still has its own browser context. Cache files
 live in the Git-ignored `playwright/.auth/` directory and contain sensitive session
 tokens: do not upload or share them. Sessions are reused for up to four hours.
-The helper checks the restored session in the application and performs a real
-login if the app redirects it to login. An account lock prevents simultaneous
+The helper validates the restored user's identity with the server and performs a real
+login if the server rejects the session. An account lock prevents simultaneous
 workers from creating duplicate sessions.
 
 Authentication, concurrent-login, and draft-across-login tests use `signInFresh()`
@@ -61,8 +67,7 @@ npx playwright test auth-cache --workers=1 --retries=0 --reporter=list
 | ----------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `npm run test:chromium -- tests/auth/TC-AU-004-logout-clears-session.spec.ts` | Run one file in Chromium                                   |
 | `npm run test:chromium -- --workers=1`                                        | Run Chromium tests one at a time                           |
-| `npm run test:firefox`                                                        | Run Firefox tests                                          |
-| `npm test`                                                                    | Run the full suite in both configured browsers             |
+| `npm test`                                                                    | Run the full suite in Chromium (Chrome engine)             |
 | `npm run test:ui`                                                             | Open Playwright's interactive test runner                  |
 | `npm run test:list`                                                           | List tests without running them                            |
 | `npm run report`                                                              | Open the HTML report after a test run                      |

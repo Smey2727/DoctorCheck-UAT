@@ -74,14 +74,20 @@ test('A rejected cached session performs one fresh login and replaces the stale 
   let acceptedToken = 'first';
   let logins = 0;
   await page.route('**/*', async (route) => {
-    const loginPage = new URL(route.request().url()).pathname === '/login';
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/graphql') {
+      const token = route.request().postDataJSON()?.token;
+      await route.fulfill({
+        json: { data: { me: token === acceptedToken ? { id: identity } : null } },
+      });
+      return;
+    }
     await route.fulfill({
       contentType: 'text/html',
-      body: loginPage
-        ? '<label>ID or email*<input></label>'
-        : '<script>if(localStorage.getItem("probe-token") !== ' +
-          JSON.stringify(acceptedToken) +
-          ') location.replace("/login");</script><button>Sign out</button>',
+      body:
+        path === '/login'
+          ? '<label>ID or email*<input></label>'
+          : '<script>fetch("/graphql",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({operationName:"Me",token:localStorage.getItem("probe-token")})}).then(r=>r.json()).then(b=>{if(!b.data.me)location.replace("/login")});</script><button>Sign out</button>',
     });
   });
   const fresh = async () => {

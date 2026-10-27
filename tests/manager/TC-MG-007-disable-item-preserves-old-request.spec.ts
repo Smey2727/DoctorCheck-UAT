@@ -5,7 +5,7 @@ import { signIn, USERS } from '../helpers/auth';
 import { createHospitalReworkRequest } from '../helpers/requests';
 
 const ITEM = 'Cranial';
-const PRODUCT_OPTION = 'Cranial Cranial · Cranium - Titanium';
+const PRODUCT_OPTION = 'Cranial Cranium - Titanium';
 function itemsSection(page: Page) {
   return page
     .getByRole('heading', { name: 'Product items', exact: true })
@@ -87,21 +87,16 @@ async function oldRequest(page: Page, requestId: string) {
 }
 async function newForm(page: Page) {
   await page.goto('/partner/new');
-  await page
-    .getByRole('combobox', { name: 'Material*', exact: true })
-    .selectOption({ label: 'Titanium' });
-  await page.getByRole('combobox', { name: 'Product*', exact: true }).click();
-  const product = page.getByRole('listbox', { name: 'Product', exact: true });
-  // Wait for the catalog to load before asserting that one specific option is absent.
+  const all = page.getByRole('button', { name: 'View all products', exact: true });
+  if (await all.isVisible()) await all.click();
+  const picker = page.getByRole('button', { name: 'Product', exact: true });
+  await expect(picker).toBeVisible();
+  if ((await picker.getAttribute('aria-expanded')) !== 'true') await picker.click();
   await expect(
-    product.getByRole('option', {
-      name: 'Mandible Maxillofacial · Mandible Implant - Titanium',
-      exact: true,
-    }),
+    page.getByRole('button', { name: 'Mandible Mandible Implant - Titanium', exact: true }),
   ).toBeVisible();
-  return product;
+  return page;
 }
-
 test('TC-MG-007: Disabled item disappears from new forms and remains on old requests', async ({
   page,
   browser,
@@ -126,7 +121,7 @@ test('TC-MG-007: Disabled item disappears from new forms and remains on old requ
     test.info().annotations.push({ type: 'request', description: requestId });
     const before = await oldRequest(page, requestId);
     await expect(
-      (await newForm(hospitalPage)).getByRole('option', { name: PRODUCT_OPTION, exact: true }),
+      (await newForm(hospitalPage)).getByRole('button', { name: PRODUCT_OPTION, exact: true }),
     ).toHaveCount(1);
     await test.step('Turn the item off and verify there is no delete action', async () => {
       restore = true;
@@ -134,7 +129,7 @@ test('TC-MG-007: Disabled item disappears from new forms and remains on old requ
     });
     await test.step('New partner form no longer offers the item', async () => {
       await expect(
-        (await newForm(hospitalPage)).getByRole('option', { name: PRODUCT_OPTION, exact: true }),
+        (await newForm(hospitalPage)).getByRole('button', { name: PRODUCT_OPTION, exact: true }),
       ).toHaveCount(0);
     });
     await test.step('Previously submitted request retains the disabled item', async () => {
@@ -158,7 +153,7 @@ test('TC-MG-007: Disabled item disappears from new forms and remains on old requ
           await setOffered(page, true);
           const verifyPage = await hospitalContext.newPage();
           await expect(
-            (await newForm(verifyPage)).getByRole('option', { name: PRODUCT_OPTION, exact: true }),
+            (await newForm(verifyPage)).getByRole('button', { name: PRODUCT_OPTION, exact: true }),
           ).toHaveCount(1);
         });
       }

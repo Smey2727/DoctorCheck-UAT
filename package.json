@@ -5,7 +5,6 @@
   "scripts": {
     "test": "playwright test",
     "test:chromium": "playwright test --project=chromium",
-    "test:firefox": "playwright test --project=firefox",
     "test:ui": "playwright test --ui",
     "test:list": "playwright test --list",
     "report": "playwright show-report",

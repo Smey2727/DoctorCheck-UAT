@@ -36,7 +36,7 @@ async function expectNoDecisionControls(page: Page) {
   await expect
     .soft(
       page.getByRole('textbox', {
-        name: /write a comment|revision memo|approval comment|add a comment/i,
+        name: /write a comment|write a case comment|revision memo|approval comment|add a comment/i,
       }),
     )
     .toHaveCount(0);
@@ -199,11 +199,13 @@ test('TC-AG-013: Selected Agency cannot comment, approve or request revision on 
     });
     test.info().annotations.push({ type: 'request', description: requestNo });
     await test.step('Hospital owner has comment and design-decision controls at this stage', async () => {
-      const owner = await loadRequest(page, requestNo, true);
+      const owner = await loadRequest(page, requestNo);
+      await page.getByRole('button', { name: /^Comments(?:,|$)/ }).click();
       expect(owner.status).toBe('REVIEW_REQUESTED');
       await expect(
-        page.getByRole('textbox', { name: 'Write a comment...', exact: true }),
+        page.getByRole('textbox', { name: 'Write a case comment', exact: true }),
       ).toBeVisible();
+      await loadRequest(page, requestNo, true);
       await expect(
         page
           .getByRole('region', { name: 'Final case decision', exact: true })

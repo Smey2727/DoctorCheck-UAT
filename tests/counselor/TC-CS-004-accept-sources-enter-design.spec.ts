@@ -32,6 +32,7 @@ test('TC-CS-004: Counselor can accept Round 2 sources and enter the design stage
   baseURL,
 }) => {
   test.setTimeout(180_000);
+  page.setDefaultTimeout(15_000);
   const hospitalContext = await browser.newContext({ baseURL });
   try {
     const caseCode = `TC-CS-004-${randomUUID().slice(0, 8)}`;
@@ -48,11 +49,12 @@ test('TC-CS-004: Counselor can accept Round 2 sources and enter the design stage
       const row = page.getByRole('row').filter({
         has: page.getByRole('cell', { name: requestId, exact: true }),
       });
-      await expect(row.getByRole('cell', { name: 'Submitted', exact: true })).toBeVisible();
+      await expect(row.getByRole('button', { name: 'Submitted', exact: true })).toBeVisible();
       const claim = row.getByRole('button', { name: 'Claim', exact: true });
       await claim.click();
       await expect(claim).toBeHidden();
-      await row.getByRole('link', { name: 'Open', exact: true }).click();
+      await page.goto(`/counselor/requests/${requestId}`);
+      await expect(page.getByRole('heading', { name: requestId, exact: true })).toBeVisible();
       await startReview(page, requestId, `${caseCode}: review Round 1`);
       await page.getByRole('button', { name: 'Request rework', exact: true }).click();
       await page

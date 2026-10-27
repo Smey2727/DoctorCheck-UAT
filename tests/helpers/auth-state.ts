@@ -72,18 +72,24 @@ export async function reuseSession(
     if (cached) {
       await page.goto('about:blank');
       await page.context().setStorageState(cached.storage);
-      await page.goto(cached.landing);
-      // Let the app validate the restored session. Expired/revoked sessions return to login.
-      await Promise.race([
-        page.getByRole('button', { name: 'Sign out', exact: true }).waitFor({ timeout: 15_000 }),
+      const [identity] = await Promise.all([
         page
-          .getByRole('textbox', { name: 'ID or email*', exact: true })
-          .waitFor({ timeout: 15_000 }),
+          .waitForResponse(
+            (response) =>
+              response.url().endsWith('/graphql') &&
+              response.request().method() === 'POST' &&
+              response.request().postDataJSON()?.operationName === 'Me',
+            { timeout: 15_000 },
+          )
+          .then((response) => response.json().catch(() => null)),
+        page.goto(cached.landing),
       ]);
-      if (
-        !new URL(page.url()).pathname.startsWith('/login') &&
-        (await page.getByRole('button', { name: 'Sign out', exact: true }).isVisible())
-      ) {
+      // The shell can briefly render a stored user before the server rejects the token.
+      // Only a successful server identity check can validate a cached session.
+      if (identity && !identity.errors && identity.data?.me?.id === cached.user.id) {
+        await page
+          .getByRole('button', { name: 'Sign out', exact: true })
+          .waitFor({ timeout: 15_000 });
         // Persist any token refresh performed while the app restored this session.
         cached.storage = await page.context().storageState({ indexedDB: true });
         await writeFile(file, JSON.stringify(cached), { mode: 0o600 });

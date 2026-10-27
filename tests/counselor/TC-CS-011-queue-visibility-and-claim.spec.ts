@@ -17,7 +17,7 @@ async function openQueue(page: Page, caseCode: string) {
 async function expectUnassigned(page: Page, requestId: string) {
   const row = requestRow(page, requestId);
   await expect(row).toBeVisible();
-  await expect(row.getByRole('cell', { name: 'Submitted', exact: true })).toBeVisible();
+  await expect(row.getByRole('button', { name: 'Submitted', exact: true })).toBeVisible();
   await expect(row.getByRole('cell', { name: 'Unassigned', exact: true })).toBeVisible();
   await expect(row.getByRole('button', { name: 'Claim', exact: true })).toBeEnabled();
 }
@@ -70,7 +70,7 @@ test('TC-CS-011: Claiming one request preserves visibility of another unassigned
         await expect(
           claimed.getByRole('cell', { name: owner.displayName, exact: true }),
         ).toBeVisible();
-        await expect(claimed.getByRole('cell', { name: 'Submitted', exact: true })).toBeVisible();
+        await expect(claimed.getByRole('button', { name: 'Submitted', exact: true })).toBeVisible();
         await expectUnassigned(counselorPage, second);
       }
     });
