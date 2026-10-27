@@ -1,6 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 import { waitForGraphqlResponse } from '../helpers/graphql';
-import { signIn, signOut } from '../helpers/auth';
+import { signInFresh as signIn, signOut } from '../helpers/auth';
 
 // Existing synthetic Hospital B request, also used by TC-HP-012.
 const REQUEST_NO = 'REQ-2026-0673';

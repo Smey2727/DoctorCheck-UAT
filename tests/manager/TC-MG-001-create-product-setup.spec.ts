@@ -1,5 +1,5 @@
-﻿import { expect, test } from '@playwright/test';
-import { signIn, signOut, USERS } from '../helpers/auth';
+import { expect, test } from '@playwright/test';
+import { signIn, clearSession, USERS } from '../helpers/auth';
 
 // Verify the active catalog setup and its availability to partners.
 // The legacy PBH item is turned off; Cranial is the current offered item.
@@ -26,7 +26,7 @@ test('TC-MG-001: Cranial PEEK setup is active and available to partners', async 
     'aria-pressed',
     'true',
   );
-  await signOut(page);
+  await clearSession(page);
 
   await signIn(page, USERS.hospital);
   await page.getByRole('link', { name: 'New Request', exact: true }).click();
@@ -41,5 +41,5 @@ test('TC-MG-001: Cranial PEEK setup is active and available to partners', async 
   await expect(offered).toBeVisible();
   await offered.click();
   await expect(product).toHaveValue('Cranial');
-  await signOut(page);
+  await clearSession(page);
 });

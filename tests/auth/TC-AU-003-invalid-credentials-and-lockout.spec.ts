@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, Page, test } from '@playwright/test';
-import { PASSWORD, selectEnglish, signIn, signOut } from '../helpers/auth';
+import { PASSWORD, selectEnglish, signInFresh as signIn, signOut } from '../helpers/auth';
 
 // Hospital C is the existing UAT account used for invalid-login testing.
 const ACCOUNT = 'hospital.c@saerosoft.com';

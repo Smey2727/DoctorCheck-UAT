@@ -1,5 +1,5 @@
-﻿import { expect, test } from '@playwright/test';
-import { signIn, signOut, USERS } from '../helpers/auth';
+import { expect, test } from '@playwright/test';
+import { signIn, clearSession, USERS } from '../helpers/auth';
 import { prepareHospitalReworkRequest } from '../helpers/requests';
 
 // TC-MG-002 now covers the current partner request form. Legacy surgery-type,
@@ -46,5 +46,5 @@ test('TC-MG-002: Current required request fields validate before submission', as
   // Stop at confirmation: this validation test does not create a request.
   await confirmation.getByRole('button', { name: 'Continue editing', exact: true }).click();
   await expect(confirmation).toBeHidden();
-  await signOut(page);
+  await clearSession(page);
 });

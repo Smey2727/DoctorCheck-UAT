@@ -1,6 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 import { waitForGraphqlResponse } from '../helpers/graphql';
-import { signIn, signOut, USERS } from '../helpers/auth';
+import { signInFresh as signIn, signOut, USERS } from '../helpers/auth';
 
 // Separate browser processes and contexts have independent authentication storage.
 // User-confirmed policy for TC-AU-007: both sessions should remain active.

@@ -1,5 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
-import { signIn, signOut } from '../../helpers/auth';
+import { signIn, clearSession } from '../../helpers/auth';
 
 // Seeded Agency B is Agency 2. This synthetic Hospital B request was
 // created by TC-HP-007 with Agency B selected; verify that linkage below.
@@ -56,7 +56,7 @@ test('TC-AG-003: Selected Agency 2 can view Hospital B request without edit, can
       .locator('xpath=following-sibling::dd[1]');
     await expect(billing).toContainText('Agency B Distribution');
     await expect(page.getByRole('button', { name: 'Cancel request', exact: true })).toBeEnabled();
-    await signOut(page);
+    await clearSession(page);
   });
 
   const agencyContext = await browser.newContext({ baseURL });
@@ -123,7 +123,7 @@ test('TC-AG-003: Selected Agency 2 can view Hospital B request without edit, can
       });
       console.log(JSON.stringify(result));
     });
-    await signOut(agency);
+    await clearSession(agency);
   } finally {
     await agencyContext.close();
   }

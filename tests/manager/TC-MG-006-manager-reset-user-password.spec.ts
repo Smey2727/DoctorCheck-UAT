@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { signIn, USERS } from '../helpers/auth';
+import { signInFresh as signIn, USERS } from '../helpers/auth';
 
 test('TC-MG-006: Manager can edit an account and reset its password', async ({ page }) => {
   // Sign in as Manager

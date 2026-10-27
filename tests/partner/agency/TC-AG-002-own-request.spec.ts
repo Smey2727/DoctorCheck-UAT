@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { waitForGraphqlResponse } from '../../helpers/graphql';
-import { signIn, signOut, USERS } from '../../helpers/auth';
+import { signIn, clearSession, USERS } from '../../helpers/auth';
 import { prepareHospitalReworkRequest } from '../../helpers/requests';
 import { syntheticCtRoundTwo } from '../../helpers/synthetic-ct';
 
@@ -147,12 +147,10 @@ test('TC-AG-002: Agency submits its own Cranial PEEK request with a 900000 KRW S
         .filter({ hasText: /^Billing account$/ })
         .locator('xpath=following-sibling::dd[1]');
       await expect(billing).toContainText(/Direct/i);
-      await test
-        .info()
-        .attach('submitted-own-request', {
-          body: await page.screenshot({ fullPage: true }),
-          contentType: 'image/png',
-        });
+      await test.info().attach('submitted-own-request', {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: 'image/png',
+      });
       console.log(
         JSON.stringify({
           requestId,
@@ -162,7 +160,7 @@ test('TC-AG-002: Agency submits its own Cranial PEEK request with a 900000 KRW S
         }),
       );
     });
-    await signOut(page);
+    await clearSession(page);
   } finally {
     test.setTimeout(test.info().timeout + 30_000);
     try {

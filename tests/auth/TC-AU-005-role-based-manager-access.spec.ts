@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { waitForGraphqlResponse } from '../helpers/graphql';
-import { signIn, signOut, USERS } from '../helpers/auth';
+import { signInFresh as signIn, signOut, USERS } from '../helpers/auth';
 
 test('TC-AU-005: Hospital, Agency and Counselor cannot access Manager user setup', async ({
   page,

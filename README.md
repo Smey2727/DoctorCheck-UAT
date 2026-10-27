@@ -28,7 +28,34 @@ The tests use UAT accounts and synthetic data. Some scenarios create requests,
 change passwords, or temporarily change shared settings. Run the test you are
 working on first. Tests that change settings contain cleanup in `finally` blocks.
 
-## Useful commands
+## Reusable authentication
+
+Ordinary tests use `signIn()` to reuse a saved session per account, browser engine,
+and configured site URL. Each test still has its own browser context. Cache files
+live in the Git-ignored `playwright/.auth/` directory and contain sensitive session
+tokens: do not upload or share them. Sessions are reused for up to four hours.
+The helper checks the restored session in the application and performs a real
+login if the app redirects it to login. An account lock prevents simultaneous
+workers from creating duplicate sessions.
+
+Authentication, concurrent-login, and draft-across-login tests use `signInFresh()`
+so their login/logout assertions remain real. Generated accounts and custom
+passwords also use fresh login. `signOut()` always logs out on the server; use
+`clearSession()` only for local cleanup or switching roles in ordinary tests.
+Local cleanup does not revoke sessions being reused elsewhere. Browser isolation
+does not isolate server-side data: shared pricing/account changes still need coordination.
+
+To disable reuse, set `$env:UAT_REUSE_AUTH = '0'`. Run
+`Remove-Item Env:UAT_REUSE_AUTH` to enable it again. To force cache renewal, delete
+only the files inside `playwright/.auth/` while no tests are running.
+
+Verify reuse and context isolation with:
+
+```powershell
+npx playwright test auth-cache --workers=1 --retries=0 --reporter=list
+```
+
+## Test commands
 
 | Command                                                                       | Purpose                                                    |
 | ----------------------------------------------------------------------------- | ---------------------------------------------------------- |

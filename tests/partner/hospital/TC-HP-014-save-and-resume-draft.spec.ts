@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { waitForGraphqlResponse } from '../../helpers/graphql';
-import { signIn, signOut } from '../../helpers/auth';
+import { signInFresh as signIn, signOut } from '../../helpers/auth';
 import { prepareHospitalReworkRequest } from '../../helpers/requests';
 import { syntheticCtRoundTwo } from '../../helpers/synthetic-ct';
 

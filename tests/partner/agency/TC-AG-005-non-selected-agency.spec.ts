@@ -1,6 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 import { waitForGraphqlResponse } from '../../helpers/graphql';
-import { signIn, signOut } from '../../helpers/auth';
+import { signIn, clearSession } from '../../helpers/auth';
 
 const REQUESTS = ['REQ-2026-0673', 'REQ-2026-0061'];
 const BILL_REQUEST = 'REQ-2026-0061';
@@ -83,7 +83,7 @@ test('TC-AG-005: Non-selected Agency 1 cannot list, open or see bills for Agency
         }),
         contentType: 'application/json',
       });
-      await signOut(page);
+      await clearSession(page);
       return selected.id;
     });
 
@@ -191,7 +191,7 @@ test('TC-AG-005: Non-selected Agency 1 cannot list, open or see bills for Agency
       contentType: 'application/json',
     });
     console.log(JSON.stringify(result));
-    await signOut(agency);
+    await clearSession(agency);
   } finally {
     await context.close();
   }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import { signIn, signOut, USERS } from '../helpers/auth';
+import { signIn, clearSession, USERS } from '../helpers/auth';
 import { createHospitalReworkRequest } from '../helpers/requests';
 
 // TC-CS-001: Start review
@@ -76,5 +76,5 @@ test('TC-CS-001: Counselor can claim a request and start review', async ({
   await expect(requestHeader.getByRole('button', { name: 'In review', exact: true })).toBeVisible();
 
   // Sign out
-  await signOut(page);
+  await clearSession(page);
 });

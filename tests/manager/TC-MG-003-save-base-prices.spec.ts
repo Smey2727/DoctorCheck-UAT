@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn, signOut, USERS } from '../helpers/auth';
+import { signIn, clearSession, USERS } from '../helpers/auth';
 
 // TC-MG-003: Save base prices
 // Small 900,000 / Medium 1,200,000 / Large 1,500,000 / Extra 1,900,000
@@ -39,5 +39,5 @@ test('TC-MG-003: Base prices are saved for every size in KRW', async ({ page }) 
   }
 
   // Sign out
-  await signOut(page);
+  await clearSession(page);
 });

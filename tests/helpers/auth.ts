@@ -1,3 +1,5 @@
+import { reuseSession } from './auth-state';
+export { clearSession } from './auth-state';
 import { Page, expect, test } from '@playwright/test';
 import { waitForGraphqlResponse } from './graphql';
 
@@ -26,6 +28,25 @@ export async function selectEnglish(page: Page) {
 
 // Use the shared password by default, or a supplied test account password.
 export async function signIn(page: Page, email: string, password = PASSWORD) {
+  const reusableAccounts: string[] = [
+    ...Object.values(USERS),
+    'hospital.a@saerosoft.com',
+    'hospital.b@saerosoft.com',
+    'hospital.c@saerosoft.com',
+    'agency.b@saerosoft.com',
+  ];
+  if (
+    process.env.UAT_REUSE_AUTH === '0' ||
+    password !== PASSWORD ||
+    !reusableAccounts.includes(email)
+  ) {
+    return signInFresh(page, email, password);
+  }
+  return reuseSession(page, email, password, () => signInFresh(page, email, password));
+}
+
+// Authentication and session-lifecycle tests must call this instead of reusing state.
+export async function signInFresh(page: Page, email: string, password = PASSWORD) {
   // Open the DoctorCheck login page
   await page.goto(LOGIN_URL);
   await selectEnglish(page);

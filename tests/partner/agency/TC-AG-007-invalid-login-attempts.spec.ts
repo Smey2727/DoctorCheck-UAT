@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, Page, test } from '@playwright/test';
-import { PASSWORD, selectEnglish, signIn, signOut } from '../../helpers/auth';
+import { PASSWORD, selectEnglish, signInFresh as signIn, signOut } from '../../helpers/auth';
 
 // Agency 1 is the target account for TC-AG-007. Run browser projects sequentially.
 const ACCOUNT = 'agency.a@saerosoft.com';

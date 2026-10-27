@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, Page, test } from '@playwright/test';
-import { selectEnglish, signIn, signOut, USERS } from '../helpers/auth';
+import { selectEnglish, signInFresh as signIn, signOut, USERS } from '../helpers/auth';
 
 async function login(page: Page, loginId: string, password: string) {
   await page.goto('/login');

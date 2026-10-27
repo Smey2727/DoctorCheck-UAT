@@ -1,6 +1,6 @@
 import { expect, Page, test } from '@playwright/test';
 import { waitForGraphqlResponse } from '../helpers/graphql';
-import { signIn, USERS } from '../helpers/auth';
+import { signInFresh as signIn, USERS } from '../helpers/auth';
 
 // Separate browser processes and contexts have independent authentication storage.
 // The expected behavior supplied in the UAT case is that both sessions stay active.

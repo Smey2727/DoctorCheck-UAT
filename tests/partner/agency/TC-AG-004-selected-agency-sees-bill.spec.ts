@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn, signOut } from '../../helpers/auth';
+import { signIn, clearSession } from '../../helpers/auth';
 
 const REQUEST_NO = 'REQ-2026-0061';
 const AMOUNT = '1140000.00';
@@ -81,5 +81,5 @@ test('TC-AG-004: Agency 2 sees its assigned bill for 1140000 KRW', async ({ page
       correctAgency: true,
     }),
   );
-  await signOut(page);
+  await clearSession(page);
 });
