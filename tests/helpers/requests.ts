@@ -1,4 +1,5 @@
 import { expect, Page } from '@playwright/test';
+import { waitForGraphqlResponse } from './graphql';
 
 // Valid ZIP containing README.txt: synthetic UAT data, no clinical images.
 // Embed the small archive so local runs and CI do not need a binary fixture file.
@@ -28,29 +29,31 @@ export async function prepareHospitalReworkRequest(
   financialAgencyId?: string,
   material = 'Titanium',
 ) {
-  await page.goto('/partner/new');
   if (financialAgencyId) {
-    await page
-      .getByRole('combobox', { name: /^Financial agency\*/ })
-      .selectOption(financialAgencyId);
+    const [body] = await Promise.all([
+      waitForGraphqlResponse(page, 'FinancialAgency').then((response) => response.json()),
+      page.goto('/partner/new'),
+    ]);
+    expect(body.errors).toBeUndefined();
+    expect(body.data.financialAgency.id).toBe(financialAgencyId);
+    const agency = page.getByRole('textbox', { name: /^Financial agency/ });
+    await expect(agency).toHaveValue(body.data.financialAgency.organizationName);
+    await expect(agency).toBeDisabled();
+  } else {
+    await page.goto('/partner/new');
   }
-  const product = page.getByRole('combobox', { name: 'Product target*', exact: true });
-  await expect(product.locator('option')).not.toHaveCount(1);
   await page
     .getByRole('textbox', { name: 'Responsible doctor*', exact: true })
     .fill('Dr. UAT Test');
   await page
     .getByRole('textbox', { name: 'Requester / coordinator*', exact: true })
     .fill('UAT Coordinator');
-  await product.selectOption({ label: 'Cranium' });
-  await page.getByRole('combobox', { name: /^Material\*/ }).selectOption({ label: material });
-  await page
-    .getByRole('combobox', { name: /^Detail type\*/ })
-    .selectOption({ label: `Cranium - ${material}` });
-  const sizeBucket = page.getByRole('combobox', { name: /^Size bucket\*/ });
-  const smallOption = sizeBucket.getByRole('option', { name: /^Small\b/ });
-  await expect(smallOption).toHaveCount(1);
-  await sizeBucket.selectOption((await smallOption.getAttribute('value'))!);
+  // The product picker groups complete configurations by material and category.
+  // The counselor selects the final size during design.
+  const product = page.getByRole('button', { name: 'Product', exact: true });
+  await expect(product).toBeVisible();
+  if ((await product.getAttribute('aria-expanded')) !== 'true') await product.click();
+  await page.getByRole('button', { name: `Cranial Cranium - ${material}`, exact: true }).click();
   await page.getByRole('textbox', { name: /^Patient name\*/ }).fill(patientName);
   const surgeryDate = new Date();
   surgeryDate.setDate(surgeryDate.getDate() + 30);

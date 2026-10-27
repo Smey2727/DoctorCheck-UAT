@@ -141,7 +141,8 @@ test('TC-CS-018: Hospital sees Revision 2 with its matching Design Result and un
       const documents = await hospitalDocuments(partnerPage, requestId);
       expect(documents).toHaveLength(1);
       originalDocument = documents[0];
-      expect(originalDocument).toMatchObject({
+      expect(originalDocument.designSources).toHaveLength(1);
+      expect(originalDocument.designSources[0]).toMatchObject({
         sourceAttachmentId: revisionOne.id,
         file: { id: revisionOne.file.id, originalName: `${caseCode}-design-v1.stl` },
       });
@@ -198,21 +199,36 @@ test('TC-CS-018: Hospital sees Revision 2 with its matching Design Result and un
       expect(latest.file.id).not.toBe(old.file.id);
       const documents = await hospitalDocuments(partnerPage, requestId);
       expect(documents).toHaveLength(2);
-      const oldDocument = documents.find((document: any) => document.sourceAttachmentId === old.id);
-      const newDocument = documents.find(
-        (document: any) => document.sourceAttachmentId === latest.id,
+      const oldDocument = documents.find((document: any) =>
+        document.designSources.some(
+          (source: { sourceAttachmentId: string }) => source.sourceAttachmentId === old.id,
+        ),
+      );
+      const newDocument = documents.find((document: any) =>
+        document.designSources.some(
+          (source: { sourceAttachmentId: string }) => source.sourceAttachmentId === latest.id,
+        ),
       );
       expect(oldDocument).toEqual(originalDocument);
       expect(newDocument).toMatchObject({
-        sourceAttachmentId: latest.id,
-        file: { id: latest.file.id, originalName: `${caseCode}-design-v2.stl` },
         partnerReviewNote: `${caseCode}: Please review synthetic design revision 2.`,
         generatedFile: { contentType: 'application/pdf', status: 'AVAILABLE' },
       });
+      expect(newDocument.designSources).toHaveLength(1);
+      expect(newDocument.designSources[0]).toMatchObject({
+        requestLineId: originalDocument.designSources[0].requestLineId,
+        sourceAttachmentId: latest.id,
+        file: { id: latest.file.id, originalName: `${caseCode}-design-v2.stl` },
+      });
       expect(newDocument.publishedAt).toBeTruthy();
       expect(newDocument.id).not.toBe(oldDocument.id);
+      const decision = partnerPage.getByRole('region', {
+        name: 'Final case decision',
+        exact: true,
+      });
+      await expect(decision).toContainText('This decision applies to v2.');
       await expect(
-        partnerPage.getByRole('button', { name: 'Approve v2', exact: true }),
+        decision.getByRole('button', { name: 'Approve design and price', exact: true }),
       ).toBeVisible();
       await expect(firstSharedCard).toBeVisible();
       // The decision badge changes to Revision requested; the shared content must not.

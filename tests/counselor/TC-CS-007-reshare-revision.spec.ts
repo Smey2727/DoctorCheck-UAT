@@ -146,8 +146,13 @@ test('TC-CS-007: Counselor can reshare Revision 2 while preserving Revision 1', 
       expect(latest.id).not.toBe(old.id);
       expect(latest.file.id).not.toBe(old.file.id);
       await partnerPage.goto(`/requests/${requestId}/model`);
+      const finalDecision = partnerPage.getByRole('region', {
+        name: 'Final case decision',
+        exact: true,
+      });
+      await expect(finalDecision).toContainText('This decision applies to v2.');
       await expect(
-        partnerPage.getByRole('button', { name: 'Approve v2', exact: true }),
+        finalDecision.getByRole('button', { name: 'Approve design and price', exact: true }),
       ).toBeVisible();
       await expect(firstSharedCard).toBeVisible();
       // The decision badge changes to Revision requested; the shared content must not.

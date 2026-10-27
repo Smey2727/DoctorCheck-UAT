@@ -33,18 +33,19 @@ test('TC-HP-018: Billing agency is locked during rework and preserved after resu
   counselorContext.setDefaultTimeout(15_000);
   try {
     await signIn(page, 'hospital.b@saerosoft.com');
-    await page.goto('/partner/new');
-    const selector = page.getByRole('combobox', { name: /^Financial agency\*/ });
-    await expect(selector.locator('option[value]:not([value=""])')).toHaveCount(2);
-    const agencyId = (await selector
-      .getByRole('option', { name: 'Agency B Distribution', exact: true })
-      .getAttribute('value'))!;
-    const alternativeId = (await selector
-      .getByRole('option', { name: 'Agency A Distribution', exact: true })
-      .getAttribute('value'))!;
+    const [agencyBody] = await Promise.all([
+      waitForGraphqlResponse(page, 'FinancialAgency').then((response) => response.json()),
+      page.goto('/partner/new'),
+    ]);
+    expect(agencyBody.errors).toBeUndefined();
+    expect(agencyBody.data.financialAgency).toMatchObject({
+      organizationName: 'Agency B Distribution',
+    });
+    const agencyId = agencyBody.data.financialAgency.id;
     expect(agencyId).toBeTruthy();
-    expect(alternativeId).toBeTruthy();
-    expect(alternativeId).not.toBe(agencyId);
+    const assignedAgency = page.getByRole('textbox', { name: /^Financial agency/ });
+    await expect(assignedAgency).toHaveValue('Agency B Distribution');
+    await expect(assignedAgency).toBeDisabled();
     const code = `TC-HP-018-${randomUUID().slice(0, 8)}`;
     const requestId = await createHospitalReworkRequest(
       page,
@@ -90,7 +91,7 @@ test('TC-HP-018: Billing agency is locked during rework and preserved after resu
       await expect(status(counselor, requestId, 'Rework requested')).toBeVisible();
     });
 
-    await test.step('Hospital cannot change billing agency despite having another active connection', async () => {
+    await test.step('Hospital cannot change the saved billing agency during rework', async () => {
       const rework = await loadRequest(page, requestId, 'partner');
       expect(rework).toMatchObject({
         status: 'SUPPLEMENT_REQUESTED',
@@ -137,6 +138,7 @@ test('TC-HP-018: Billing agency is locked during rework and preserved after resu
       ]);
       expect(body.errors).toBeUndefined();
       await expect(page).toHaveURL(new RegExp(`/partner/requests/${requestId}$`));
+      await expect(status(page, requestId, 'Submitted')).toBeVisible();
       const persisted = await loadRequest(page, requestId, 'partner');
       expect(persisted).toMatchObject({ status: 'SUBMITTED', financialAgencyUserId: agencyId });
       await expect(status(page, requestId, 'Submitted')).toBeVisible();
@@ -155,7 +157,7 @@ test('TC-HP-018: Billing agency is locked during rework and preserved after resu
         requestId,
         agency: 'Agency B Distribution',
         agencyId,
-        alternativeAgencyAvailableForNewRequests: true,
+        agencyAutomaticallyAssigned: true,
         agencyLockedOnResubmit: true,
         lockMessage: 'Fixed for this request after first submission.',
         finalStatus: 'SUBMITTED',

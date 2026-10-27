@@ -150,7 +150,7 @@ test('TC-HP-010: Hospital approves the new shared revision and receives an Appro
       expect(latest.file.id).not.toBe(old.file.id);
       await partnerPage.goto(`/requests/${requestId}/model`);
       await expect(
-        partnerPage.getByRole('button', { name: 'Approve v2', exact: true }),
+        partnerPage.getByRole('button', { name: 'Approve design and price', exact: true }),
       ).toBeVisible();
       await expect(firstSharedCard).toBeVisible();
       // The decision badge changes to Revision requested; the shared content must not.
@@ -168,13 +168,20 @@ test('TC-HP-010: Hospital approves the new shared revision and receives an Appro
       );
     });
     await test.step('Hospital approves shared Revision 2', async () => {
-      await partnerPage.getByRole('button', { name: 'Approve v2', exact: true }).click();
+      const decision = partnerPage.getByRole('region', {
+        name: 'Final case decision',
+        exact: true,
+      });
+      await expect(decision).toContainText('This decision applies to v2.');
+      await partnerPage
+        .getByRole('button', { name: 'Approve design and price', exact: true })
+        .click();
       const approval = partnerPage.getByRole('alertdialog', {
         name: 'Approve this design?',
         exact: true,
       });
       await approval.getByRole('checkbox', { name: /^I reviewed/ }).check();
-      await approval.getByRole('button', { name: 'Approve v2', exact: true }).click();
+      await approval.getByRole('button', { name: 'Approve design and price', exact: true }).click();
       await expect(approval).toBeHidden();
       const approved = await openCounselorRequest(page, requestId);
       expect(approved.details.status).toBe('DESIGN_CONFIRMED');
@@ -206,16 +213,21 @@ test('TC-HP-010: Hospital approves the new shared revision and receives an Appro
         );
         expect(drawings).toHaveLength(1);
         drawing = drawings[0];
+
         expect(drawing).toMatchObject({
           requestNo: requestId,
-          file: { originalName: `${caseCode}-design-v2.stl` },
           generatedFile: { contentType: 'application/pdf', status: 'AVAILABLE' },
         });
         const approvedAttachment = requestBody.data.request.details.attachments.find(
           (a: any) => a.category === 'DESIGN_RESULT' && a.version === 2,
         );
         expect(approvedAttachment).toBeDefined();
-        expect(drawing.sourceAttachmentId).toBe(approvedAttachment.id);
+        expect(drawing.designSources).toHaveLength(1);
+        expect(drawing.designSources[0]).toMatchObject({
+          sourceAttachmentId: approvedAttachment.id,
+          lineNo: 1,
+          file: { originalName: caseCode + '-design-v2.stl' },
+        });
       }).toPass({ timeout: 30_000, intervals: [1000, 2000, 5000] });
       await expect(requestStatus(verification, requestId, 'Design confirmed')).toBeVisible();
       await verification.getByRole('link', { name: 'Documents / print', exact: true }).click();

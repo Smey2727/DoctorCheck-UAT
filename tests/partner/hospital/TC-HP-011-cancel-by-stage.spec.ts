@@ -20,7 +20,13 @@ async function loadRequest(
   model = false,
 ) {
   const [body] = await Promise.all([
-    waitForGraphqlResponse(page, 'Request').then((response) => response.json()),
+    page
+      .waitForResponse(async (response) => {
+        if (!response.url().endsWith('/graphql')) return false;
+        const body = await response.json().catch(() => null);
+        return body?.data?.request?.details?.requestNo === requestId;
+      })
+      .then((response) => response.json()),
     page.goto(model ? `/requests/${requestId}/model` : `/${role}/requests/${requestId}`),
   ]);
   expect(body.errors).toBeUndefined();

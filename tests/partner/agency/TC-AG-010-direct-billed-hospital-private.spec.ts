@@ -2,43 +2,6 @@ import { expect, Page, test } from '@playwright/test';
 import { getAuthorizationHeaders, waitForGraphqlResponse } from '../../helpers/graphql';
 import { signIn, USERS } from '../../helpers/auth';
 
-async function login(page: Page, account: string) {
-  let cooldown: { message: string; retryAfterSeconds: number } | undefined;
-  const observe = async (response: import('@playwright/test').Response) => {
-    if (
-      !response.url().endsWith('/graphql') ||
-      response.request().postDataJSON()?.operationName !== 'Login'
-    ) {
-      return;
-    }
-    const body = await response.json().catch(() => null);
-    const error = body?.errors?.find((entry: any) => entry.extensions?.code === 'RATE_LIMITED');
-    if (error) {
-      cooldown = { message: error.message, retryAfterSeconds: error.extensions.retryAfterSeconds };
-    }
-  };
-  // Read the login response alongside the helper before handling its assertion.
-  const observed = waitForGraphqlResponse(page, 'Login').then(observe);
-  observed.catch(() => {});
-  try {
-    return await signIn(page, account);
-  } catch (error) {
-    await observed;
-    if (!cooldown) {
-      throw error;
-    }
-    const reason = `TC-AG-010 BLOCKED: ${account} login is rate limited; retry after ${cooldown.retryAfterSeconds} seconds. Privacy checks were not executed.`;
-    test.info().annotations.push({ type: 'blocked', description: reason });
-    await test.info().attach('login-cooldown', {
-      body: JSON.stringify({ account, ...cooldown }),
-      contentType: 'application/json',
-    });
-    console.log(reason);
-    test.skip(true, reason);
-    throw error;
-  }
-}
-
 async function captureBilling(page: Page, role: 'manager' | 'partner') {
   const [captured] = await Promise.all([
     waitForGraphqlResponse(page, 'BillingSummary').then(async (r) => ({
@@ -62,7 +25,7 @@ async function captureBilling(page: Page, role: 'manager' | 'partner') {
   };
 }
 
-test('TC-AG-010: Agency 1 cannot see a direct-billed Hospital C request or its bill', async ({
+test('TC-AG-010: Agency 1 cannot see a direct-billed DoctorCheck Demo Hospital request or its bill', async ({
   page,
   browser,
   baseURL,
@@ -70,53 +33,36 @@ test('TC-AG-010: Agency 1 cannot see a direct-billed Hospital C request or its b
   test.setTimeout(120_000);
   page.setDefaultTimeout(15_000);
   // Check the target Agency login first, before spending other login attempts.
-  const agencyUser = await login(page, USERS.agency);
+  const agencyUser = await signIn(page, USERS.agency);
   expect(agencyUser.role).toBe('PARTNER');
   const context = await browser.newContext({ baseURL });
   try {
     const manager = await context.newPage();
     manager.setDefaultTimeout(15_000);
-    await login(manager, USERS.manager);
+    await signIn(manager, USERS.manager);
     const managerBilling = await captureBilling(manager, 'manager');
-    const years = await manager
-      .getByRole('combobox', { name: 'Year', exact: true })
-      .locator('option')
-      .evaluateAll((options) =>
-        options.map((option) => Number((option as HTMLOptionElement).value)),
-      );
-    let fixture: { requestNo: string; payerId: string; year: number; month: number } | undefined;
-    await test.step('Find an existing Hospital C bill paid directly by Hospital C', async () => {
-      for (const year of years) {
-        for (let month = 12; month >= 1; month--) {
-          const summary = await managerBilling(year, month);
-          const group = summary.directPartnerGroups.find(
-            (entry: any) =>
-              !entry.viaAgency &&
-              entry.billedToName === 'Hospital C Medical Center' &&
-              entry.requests.some((bill: any) => bill.hospital === 'Hospital C Medical Center'),
-          );
-          if (group) {
-            const bill = group.requests.find(
-              (entry: any) => entry.hospital === 'Hospital C Medical Center',
-            );
-            fixture = { requestNo: bill.requestNo, payerId: group.billedToUserId, year, month };
-            break;
-          }
-        }
-        if (fixture) {
-          break;
-        }
-      }
-      if (!fixture) {
-        const reason =
-          'TC-AG-010 BLOCKED: No existing direct-billed Hospital C request was found in the available billing periods.';
-        test.info().annotations.push({ type: 'blocked', description: reason });
-        test.skip(true, reason);
-        return;
-      }
-      expect(fixture.payerId).not.toBe(agencyUser.id);
+    const requestNo = 'REQ-2026-0036';
+    const year = 2026;
+    const month = 9;
+    const summary = await managerBilling(year, month);
+    const group = summary.directPartnerGroups.find((entry: any) =>
+      entry.requests.some((bill: any) => bill.requestNo === requestNo),
+    );
+    expect(group, 'The seeded direct-billed hospital invoice must exist').toBeDefined();
+    expect(group).toMatchObject({ viaAgency: false, billedToName: 'DoctorCheck Demo Hospital' });
+    expect(group.billedToUserId).not.toBe(agencyUser.id);
+    const bill = group.requests.find((entry: any) => entry.requestNo === requestNo);
+    expect(bill).toMatchObject({
+      hospital: 'DoctorCheck Demo Hospital',
+      invoiceStatus: 'PAID',
+      currency: 'KRW',
     });
-    const { requestNo, year, month } = fixture!;
+    expect(Number(bill.amount)).toBeGreaterThan(0);
+    const fixture = { requestNo, payerId: group.billedToUserId, year, month };
+    await test.info().attach('direct-hospital-bill-baseline', {
+      body: JSON.stringify({ ...fixture, bill }, null, 2),
+      contentType: 'application/json',
+    });
     const [owned] = await Promise.all([
       waitForGraphqlResponse(manager, 'Request').then((response) => response.json()),
       manager.goto(`/manager/requests/${requestNo}`),
@@ -124,25 +70,23 @@ test('TC-AG-010: Agency 1 cannot see a direct-billed Hospital C request or its b
     expect(owned.errors).toBeUndefined();
     expect(owned.data.request.details).toMatchObject({
       requestNo,
-      hospital: 'Hospital C Medical Center',
+      hospital: 'DoctorCheck Demo Hospital',
       financialAgencyUserId: null,
     });
-    const patientCode = owned.data.request.details.patientCode;
-    expect(patientCode).toBeTruthy();
+    const patientName = owned.data.request.details.patientName;
+    expect(patientName).toBeTruthy();
 
-    await test.step('All requests search excludes the direct-billed Hospital C request', async () => {
-      await page.goto('/account');
-      await page.goto('/partner/requests');
-      await Promise.all([
-        waitForGraphqlResponse(page, 'Requests').then((response) => response.json()),
-        page.getByRole('button', { name: /^All(?:,|$)/ }).click(),
+    await test.step('All requests search excludes the direct-billed DoctorCheck Demo Hospital request', async () => {
+      const [initial] = await Promise.all([
+        waitForGraphqlResponse(page, 'Requests'),
+        page.goto('/partner/requests'),
       ]);
-      await expect(
-        page.getByRole('combobox', { name: 'Status', exact: true }).locator('option:checked'),
-      ).toHaveText('All statuses');
-      await expect(
-        page.getByRole('combobox', { name: 'Last updated', exact: true }).locator('option:checked'),
-      ).toHaveText('Any time');
+      const {
+        page: _page,
+        size: _size,
+        ...filters
+      } = initial.request().postDataJSON().variables.input;
+      expect(filters).toEqual({ partnerView: 'SUBMITTED' });
       const [body] = await Promise.all([
         page
           .waitForResponse(
@@ -152,12 +96,12 @@ test('TC-AG-010: Agency 1 cannot see a direct-billed Hospital C request or its b
               JSON.stringify(r.request().postDataJSON()?.variables).includes(requestNo),
           )
           .then((response) => response.json()),
-        page.getByPlaceholder('Search request no - patient - product').fill(requestNo),
+        page.getByPlaceholder('Search patient, Hospital, doctor, or request no.').fill(requestNo),
       ]);
       expect(body.errors).toBeUndefined();
       expect(body.data.requests).toMatchObject({ items: [], totalCount: 0 });
       await expect(page.getByRole('cell', { name: requestNo, exact: true })).toHaveCount(0);
-      await test.info().attach('hospital-c-not-in-agency-list', {
+      await test.info().attach('direct-hospital-not-in-agency-list', {
         body: await page.screenshot(),
         contentType: 'image/png',
       });
@@ -179,15 +123,15 @@ test('TC-AG-010: Agency 1 cannot see a direct-billed Hospital C request or its b
       await expect(page.getByRole('alert')).toHaveText(
         'You do not have permission to perform this action.',
       );
-      await expect(page.locator('body')).not.toContainText(patientCode);
+      await expect(page.locator('body')).not.toContainText(patientName);
       await expect(page.getByRole('heading', { name: requestNo, exact: true })).toHaveCount(0);
-      await test.info().attach('hospital-c-direct-url-denied', {
+      await test.info().attach('direct-hospital-direct-url-denied', {
         body: await page.screenshot(),
         contentType: 'image/png',
       });
     });
 
-    await test.step('Existing Hospital C bill is absent from Agency 1 billing', async () => {
+    await test.step('Existing DoctorCheck Demo Hospital bill is absent from Agency 1 billing', async () => {
       const summary = await (await captureBilling(page, 'partner'))(year, month);
       for (const group of [...summary.agencyGroups, ...summary.directPartnerGroups]) {
         expect(group.billedToUserId).toBe(agencyUser.id);
@@ -199,7 +143,7 @@ test('TC-AG-010: Agency 1 cannot see a direct-billed Hospital C request or its b
         page.getByRole('heading', { name: 'Invoices by request', exact: true }),
       ).toBeVisible();
       await expect(page.getByRole('link', { name: requestNo, exact: true })).toHaveCount(0);
-      await test.info().attach('hospital-c-bill-excluded', {
+      await test.info().attach('direct-hospital-bill-excluded', {
         body: await page.screenshot({ fullPage: true }),
         contentType: 'image/png',
       });

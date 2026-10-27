@@ -78,7 +78,12 @@ test('TC-CS-005: Design registration blocks normal counselors and permits design
       const request = await openCounselorRequest(page, requestId, true);
       expect(request.details.status).toBe('CONVERTING_3D');
       expect(request.details.allowedActions).not.toContain('REGISTER_DESIGN_FILE');
-      await expect(page.getByText('Read-only audit mode', { exact: true })).toBeVisible();
+      await expect(
+        page.getByText(
+          'Design participation access is required to upload, restore, share, or record design decisions.',
+          { exact: true },
+        ),
+      ).toBeVisible();
       await expect(
         page.getByRole('button', { name: 'Upload converted 3D', exact: true }),
       ).toHaveCount(0);
@@ -114,7 +119,12 @@ test('TC-CS-005: Design registration blocks normal counselors and permits design
       expect(request.counselorUserId).toBe(reviewer.id);
       expect(request.details.status).toBe('PRODUCT_DESIGN');
       expect(request.details.allowedActions).not.toContain('REGISTER_DESIGN_FILE');
-      await expect(page.getByText('Read-only audit mode', { exact: true })).toBeVisible();
+      await expect(
+        page.getByText(
+          'Design participation access is required to upload, restore, share, or record design decisions.',
+          { exact: true },
+        ),
+      ).toBeVisible();
       await expect(page.getByRole('button', { name: /^Upload design result$/i })).toHaveCount(0);
       await expect(page.getByRole('button', { name: /^Register design$/i })).toHaveCount(0);
     });
@@ -169,7 +179,7 @@ test('TC-CS-005: Design registration blocks normal counselors and permits design
         uploadedByUserId: designer.id,
         file: { originalName: designName, status: 'AVAILABLE' },
         specification: {
-          product: 'Cranium',
+          product: 'Cranial',
           material: 'Titanium',
           dimensions: { widthMm: '10.000', heightMm: '10.000', thicknessMm: '10.000' },
         },

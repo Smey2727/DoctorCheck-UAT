@@ -26,6 +26,9 @@ test('TC-HP-012: Hospital A cannot open Hospital B requests or Manager screens b
       requestNo: HOSPITAL_B_REQUEST,
       hospital: 'Hospital B Medical Center',
     });
+    const patientName = owned.data.request.details.patientName;
+    expect(typeof patientName).toBe('string');
+    expect(patientName.trim().length).toBeGreaterThan(0);
     await expect(
       hospitalB.getByRole('heading', { name: HOSPITAL_B_REQUEST, exact: true }),
     ).toBeVisible();
@@ -55,9 +58,7 @@ test('TC-HP-012: Hospital A cannot open Hospital B requests or Manager screens b
       await expect(
         page.getByRole('heading', { name: HOSPITAL_B_REQUEST, exact: true }),
       ).toHaveCount(0);
-      await expect(
-        page.getByText(owned.data.request.details.patientCode, { exact: true }),
-      ).toHaveCount(0);
+      await expect(page.getByText(patientName, { exact: true })).toHaveCount(0);
       await test.info().attach('other-hospital-request-denied', {
         body: await page.screenshot(),
         contentType: 'image/png',

@@ -43,11 +43,9 @@ function parseCsv(source: string): string[][] {
 
 interface QueueItem {
   requestNo: string;
-  patientCode: string;
+  patientNameMasked: string;
   surgeryDate: string;
-  productCategory: string | null;
-  product: string;
-  material: string;
+  lines: { productCategory: string | null; product: string; material: string }[];
   hospital: string;
   agencyNames: string[];
   status: string;
@@ -122,9 +120,8 @@ async function verifyExport(page: Page, expected: QueueItem[]) {
     'Request no',
     'Patient',
     'Surgery date',
-    'Product category',
-    'Product',
-    'Material',
+    'Product categories',
+    'Products',
     'Hospital',
     'Agencies',
     'Status',
@@ -140,11 +137,10 @@ async function verifyExport(page: Page, expected: QueueItem[]) {
     const date = new Date(`${item.surgeryDate.slice(0, 10)}T12:00:00Z`);
     expect(row).toEqual([
       item.requestNo,
-      item.patientCode,
+      item.patientNameMasked,
       new Intl.DateTimeFormat('en-US', { timeZone: 'UTC' }).format(date),
-      item.productCategory ?? '',
-      item.product,
-      item.material,
+      [...new Set(item.lines.map((line) => line.productCategory).filter(Boolean))].join('; '),
+      item.lines.map((line) => `${line.product} / ${line.material}`).join('; '),
       item.hospital,
       item.agencyNames.join('; '),
       'Submitted',
@@ -215,7 +211,7 @@ test('TC-CS-019: Filtered CSV contains only matching requests and correct column
     );
     const rows = await verifyExport(page, expected);
     for (const row of rows) {
-      expect(row[6]).toBe(hospitalName);
+      expect(row[5]).toBe(hospitalName);
     }
     test.info().annotations.push({
       type: 'export',

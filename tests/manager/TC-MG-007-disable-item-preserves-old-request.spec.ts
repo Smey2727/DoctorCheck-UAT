@@ -4,7 +4,8 @@ import { waitForGraphqlResponse } from '../helpers/graphql';
 import { signIn, USERS } from '../helpers/auth';
 import { createHospitalReworkRequest } from '../helpers/requests';
 
-const ITEM = 'Cranium';
+const ITEM = 'Cranial';
+const PRODUCT_OPTION = 'Cranial Cranial · Cranium - Titanium';
 function itemsSection(page: Page) {
   return page
     .getByRole('heading', { name: 'Product items', exact: true })
@@ -70,29 +71,34 @@ async function oldRequest(page: Page, requestId: string) {
   const details = body.data.request.details;
   expect(details).toMatchObject({
     requestNo: requestId,
-    product: ITEM,
-    material: 'Titanium',
     status: 'SUBMITTED',
   });
+  expect(details.lines).toHaveLength(1);
+  expect(details.lines[0]).toMatchObject({ product: ITEM, material: 'Titanium' });
   await expect(
     page.getByRole('heading', { name: `Request ${requestId}`, exact: true }),
   ).toBeVisible();
   return {
-    detailTypeId: details.detailTypeId,
-    product: details.product,
-    productCategory: details.productCategory,
-    material: details.material,
-    patientCode: details.patientCode,
-    priceSizeBucketLabel: details.priceSizeBucketLabel,
+    lines: details.lines,
+    patientName: details.patientName,
     status: details.status,
     statusHistory: details.statusHistory,
   };
 }
 async function newForm(page: Page) {
   await page.goto('/partner/new');
-  const product = page.getByRole('combobox', { name: 'Product target*', exact: true });
+  await page
+    .getByRole('combobox', { name: 'Material*', exact: true })
+    .selectOption({ label: 'Titanium' });
+  await page.getByRole('combobox', { name: 'Product*', exact: true }).click();
+  const product = page.getByRole('listbox', { name: 'Product', exact: true });
   // Wait for the catalog to load before asserting that one specific option is absent.
-  await expect(product.getByRole('option', { name: 'PBH', exact: true })).toHaveCount(1);
+  await expect(
+    product.getByRole('option', {
+      name: 'Mandible Maxillofacial · Mandible Implant - Titanium',
+      exact: true,
+    }),
+  ).toBeVisible();
   return product;
 }
 
@@ -120,7 +126,7 @@ test('TC-MG-007: Disabled item disappears from new forms and remains on old requ
     test.info().annotations.push({ type: 'request', description: requestId });
     const before = await oldRequest(page, requestId);
     await expect(
-      (await newForm(hospitalPage)).getByRole('option', { name: ITEM, exact: true }),
+      (await newForm(hospitalPage)).getByRole('option', { name: PRODUCT_OPTION, exact: true }),
     ).toHaveCount(1);
     await test.step('Turn the item off and verify there is no delete action', async () => {
       restore = true;
@@ -128,7 +134,7 @@ test('TC-MG-007: Disabled item disappears from new forms and remains on old requ
     });
     await test.step('New partner form no longer offers the item', async () => {
       await expect(
-        (await newForm(hospitalPage)).getByRole('option', { name: ITEM, exact: true }),
+        (await newForm(hospitalPage)).getByRole('option', { name: PRODUCT_OPTION, exact: true }),
       ).toHaveCount(0);
     });
     await test.step('Previously submitted request retains the disabled item', async () => {
@@ -152,7 +158,7 @@ test('TC-MG-007: Disabled item disappears from new forms and remains on old requ
           await setOffered(page, true);
           const verifyPage = await hospitalContext.newPage();
           await expect(
-            (await newForm(verifyPage)).getByRole('option', { name: ITEM, exact: true }),
+            (await newForm(verifyPage)).getByRole('option', { name: PRODUCT_OPTION, exact: true }),
           ).toHaveCount(1);
         });
       }

@@ -94,13 +94,15 @@ test('TC-CS-015: QA/QC saves and finalizes independently without gating producti
     ).toHaveCount(0);
     const partnerPage = await hospitalContext.newPage();
     await partnerPage.goto(`/requests/${requestId}/model`);
-    await partnerPage.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    const decision = partnerPage.getByRole('region', { name: 'Final case decision', exact: true });
+    await expect(decision).toContainText('This decision applies to v1.');
+    await decision.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     const approval = partnerPage.getByRole('alertdialog', {
       name: 'Approve this design?',
       exact: true,
     });
     await approval.getByRole('checkbox', { name: /^I reviewed/ }).check();
-    await approval.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    await approval.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     await expect(approval).toBeHidden();
     const approved = await openCounselorRequest(page, requestId);
     expect(approved.details.status).toBe('DESIGN_CONFIRMED');
@@ -172,8 +174,13 @@ test('TC-CS-015: QA/QC saves and finalizes independently without gating producti
       await managerPage.goto(`/manager/requests/${requestId}`);
       await test.step('Unsigned QC does not block production or synthetic dispatch', async () => {
         await managerPage.getByRole('button', { name: 'Update production', exact: true }).click();
-        const production = managerPage.getByRole('dialog', {
+        const productionDetails = managerPage.getByRole('dialog', {
           name: 'Production details',
+          exact: true,
+        });
+        await productionDetails.getByRole('button', { name: 'Edit', exact: true }).click();
+        const production = managerPage.getByRole('dialog', {
+          name: 'Cranial · Titanium',
           exact: true,
         });
         await production

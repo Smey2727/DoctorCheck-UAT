@@ -94,13 +94,15 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
     ).toHaveCount(0);
     const partnerPage = await hospitalContext.newPage();
     await partnerPage.goto(`/requests/${requestId}/model`);
-    await partnerPage.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    const decision = partnerPage.getByRole('region', { name: 'Final case decision', exact: true });
+    await expect(decision).toContainText('This decision applies to v1.');
+    await decision.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     const approval = partnerPage.getByRole('alertdialog', {
       name: 'Approve this design?',
       exact: true,
     });
     await approval.getByRole('checkbox', { name: /^I reviewed/ }).check();
-    await approval.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    await approval.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     await expect(approval).toBeHidden();
     const approved = await openCounselorRequest(page, requestId);
     expect(approved.details.status).toBe('DESIGN_CONFIRMED');
@@ -127,10 +129,17 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
         return body.data.requestOperations;
       }
       const dispatch = manager.getByRole('button', { name: 'Record shipment', exact: true });
-      const production = manager.getByRole('dialog', { name: 'Production details', exact: true });
+      async function openProduction() {
+        await manager.getByRole('button', { name: 'Update production', exact: true }).click();
+        await manager
+          .getByRole('dialog', { name: 'Production details', exact: true })
+          .getByRole('button', { name: 'Edit', exact: true })
+          .click();
+      }
+      const production = manager.getByRole('dialog', { name: 'Cranial · Titanium', exact: true });
       await operations();
       await test.step('Dispatch is unavailable before production DONE', async () => {
-        await manager.getByRole('button', { name: 'Update production', exact: true }).click();
+        await openProduction();
         await production
           .getByRole('combobox', { name: 'Production status*', exact: true })
           .selectOption('IN_PRODUCTION');
@@ -154,7 +163,7 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
         });
       });
       await test.step('Complete synthetic production and record the required pre-shipment call check', async () => {
-        await manager.getByRole('button', { name: 'Update production', exact: true }).click();
+        await openProduction();
         await production
           .getByRole('combobox', { name: 'Production status*', exact: true })
           .selectOption('DONE');
@@ -213,7 +222,20 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
         });
       });
       await test.step('Hospital receives the shipment notification for this request', async () => {
-        await partnerPage.goto('/notifications');
+        const [notificationsBody] = await Promise.all([
+          waitForGraphqlResponse(partnerPage, 'Notifications').then((response) => response.json()),
+          partnerPage.goto('/notifications'),
+        ]);
+        expect(notificationsBody.errors).toBeUndefined();
+        const shipmentNotice = notificationsBody.data.notifications.find(
+          (entry: { title: string }) => entry.title === 'Shipment dispatched',
+        );
+        expect(shipmentNotice).toMatchObject({
+          requestNo: requestId,
+          requestStatus: 'SHIPPED',
+          viewerOwnsRequest: true,
+          body: 'Your request has been shipped.',
+        });
         // Shipment notifications omit the request number from the card text.
         // Verify the destination of the newest dispatched notification instead.
         const notification = partnerPage
@@ -231,7 +253,9 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
           contentType: 'image/png',
         });
         await notification.getByRole('button', { name: 'Open request', exact: true }).click();
-        await expect(partnerPage).toHaveURL(new RegExp(`/partner/requests/${requestId}$`));
+        await expect(partnerPage).toHaveURL(new RegExp(`/partner/requests/${requestId}$`), {
+          timeout: 15_000,
+        });
         await expect(requestStatus(partnerPage, requestId, 'Shipped')).toBeVisible();
       });
       console.log(

@@ -18,12 +18,7 @@ async function loadAgency(page: Page, name: string) {
     }),
     (async () => {
       await page.goto('/manager/agencies');
-      if (name !== SOURCE_AGENCY) {
-        await expect(page.getByRole('heading', { name: SOURCE_AGENCY, exact: true })).toBeVisible();
-        await page
-          .getByRole('button', { name: new RegExp(`^${name} ${name} Distribution`) })
-          .click();
-      }
+      await page.getByRole('button', { name: new RegExp(`^${name} ${name} Distribution`) }).click();
     })(),
   ]);
   const body = await response.json();
@@ -58,17 +53,20 @@ test('TC-MG-021: Non-agency Partner cannot be mapped to a second active Agency',
       name: `Add a partner user to ${TARGET_AGENCY}`,
       exact: true,
     });
+    await dialog.getByRole('button', { name: 'Partner member', exact: true }).click();
     await dialog
-      .getByRole('textbox', { name: 'Search by hospital, department, name, or email', exact: true })
+      .getByRole('searchbox', { name: 'Find a partner', exact: true })
       .fill(PARTNER_LOGIN);
-    const candidate = dialog
-      .getByRole('combobox', { name: 'Partner member', exact: true })
-      .locator(`option[value="${member.memberUserId}"]`);
-    // Capture actual availability; the server check still runs if the UI hides it.
-    const offered = await candidate.count();
+    const candidate = dialog.getByRole('button', {
+      name: new RegExp(PARTNER_LOGIN.replaceAll('.', '\\.')),
+    });
+    await expect(candidate).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Add user', exact: true })).toBeDisabled();
+    const selectable = await candidate.isEnabled();
     await test
       .info()
       .attach('second-agency-picker', { body: await page.screenshot(), contentType: 'image/png' });
+    await dialog.getByRole('button', { name: 'Partner member', exact: true }).click();
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
     attempted = true;
     const response = await page.request.post(target.endpoint, {
@@ -98,7 +96,7 @@ test('TC-MG-021: Non-agency Partner cannot be mapped to a second active Agency',
       partner: PARTNER_LOGIN,
       existingAgency: SOURCE_AGENCY,
       attemptedAgency: TARGET_AGENCY,
-      offeredInSecondAgencyPicker: offered > 0,
+      selectableInSecondAgencyPicker: selectable,
       errors: added.errors ?? null,
       secondActiveConnections: activeSecond.length,
       firstAgencyUnchanged:

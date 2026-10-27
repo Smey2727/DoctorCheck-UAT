@@ -8,130 +8,28 @@ import {
   shareDesign,
 } from '../../helpers/design-workflow';
 import { signIn, USERS } from '../../helpers/auth';
+import { prepareHospitalReworkRequest } from '../../helpers/requests';
 import { syntheticCtRoundTwo } from '../../helpers/synthetic-ct';
 import { syntheticModel } from '../../helpers/synthetic-model';
 
-async function login(page: Page, account: string) {
-  const response = waitForGraphqlResponse(page, 'Login').then((response) => response.json());
-  // Observe the response immediately, including if navigation itself fails.
-  response.catch(() => {});
-  try {
-    return await signIn(page, account);
-  } catch (error) {
-    const body = await response;
-    const limit = body.errors?.find((entry: any) => entry.extensions?.code === 'RATE_LIMITED');
-    if (!limit) {
-      throw error;
-    }
-    const reason = `TC-AG-009 BLOCKED: ${account} login is rate limited; retry after ${limit.extensions.retryAfterSeconds} seconds. Billing checks were not completed.`;
-    test.info().annotations.push({ type: 'blocked', description: reason });
-    await test.info().attach('login-cooldown', {
-      body: JSON.stringify({
-        account,
-        message: limit.message,
-        retryAfterSeconds: limit.extensions.retryAfterSeconds,
-      }),
-      contentType: 'application/json',
-    });
-    console.log(reason);
-    test.skip(true, reason);
-    throw error;
-  }
-}
-
 async function createAgencyOwnRequest(page: Page, caseCode: string) {
-  await page.goto('/partner/new');
-  await page
-    .getByRole('combobox', { name: 'Product target*', exact: true })
-    .selectOption({ label: 'PBH' });
-  await page.getByRole('combobox', { name: /^Material\*/ }).selectOption({ label: 'PEEK' });
-  await page
-    .getByRole('combobox', { name: /^Detail type\*/ })
-    .selectOption({ label: 'PBH - PEEK' });
-  const size = page.getByRole('combobox', { name: /^Size bucket\*/ });
-  const small = size.getByRole('option', { name: /^Small\b/ });
-  const unavailable = page.getByText(
-    'No calculated quote is available. Ask a Manager to configure the applicable price.',
-    { exact: true },
+  await prepareHospitalReworkRequest(
+    page,
+    caseCode,
+    {
+      ...syntheticCtRoundTwo,
+      name: `${caseCode}-synthetic-ct.zip`,
+    },
+    undefined,
+    'PEEK',
   );
-  await expect(async () => {
-    expect((await small.count()) > 0 || (await unavailable.isVisible())).toBe(true);
-  }).toPass({ timeout: 15_000 });
-  if (await unavailable.isVisible()) {
-    const result = {
-      status: 'BLOCKED',
-      account: USERS.agency,
-      product: 'PBH / PEEK / Small',
-      expectedPrice: 900000,
-      currency: 'KRW',
-      actual: await unavailable.innerText(),
-      availableSizes: await size.locator('option').allTextContents(),
-      requestSubmitted: false,
-    };
-    await test.info().attach('pricing-blocker', {
-      body: JSON.stringify(result, null, 2),
-      contentType: 'application/json',
-    });
-    await test.info().attach('pricing-unavailable', {
-      body: await page.screenshot({ fullPage: true }),
-      contentType: 'image/png',
-    });
-    console.log(JSON.stringify(result));
-    const reason =
-      'TC-AG-009 BLOCKED: PBH / PEEK / Small pricing is unavailable; full flow cannot start.';
-    test.info().annotations.push({ type: 'blocked', description: reason });
-    test.skip(true, reason);
-  }
-  await expect(small).toHaveCount(1);
-  await size.selectOption((await small.getAttribute('value'))!);
+  await page
+    .getByRole('textbox', { name: 'Hospital*', exact: true })
+    .fill('TC-AG-009 Synthetic Hospital');
   await expect(
     page.getByText('Direct billing to this partner account', { exact: true }),
   ).toBeVisible();
   await expect(page.getByText(/KRW\s*900,000(?:\.00)?/).first()).toBeVisible();
-
-  await test.step('Complete an Agency-owned request with synthetic case data and CT', async () => {
-    await page
-      .getByRole('textbox', { name: 'Requesting surgeon*', exact: true })
-      .fill('Dr. UAT Test');
-    await page
-      .getByRole('textbox', { name: 'Hospital*', exact: true })
-      .fill('TC-AG-009 Synthetic Hospital');
-    await page
-      .getByRole('textbox', { name: 'Requester / coordinator*', exact: true })
-      .fill('UAT Agency Coordinator');
-    await page.getByRole('textbox', { name: 'Patient code*', exact: true }).fill(caseCode);
-    const surgeryDate = new Date();
-    surgeryDate.setDate(surgeryDate.getDate() + 30);
-    await page
-      .getByRole('textbox', { name: 'Planned surgery date*', exact: true })
-      .fill(surgeryDate.toISOString().slice(0, 10));
-    await page
-      .getByRole('combobox', { name: /^Surgery type\*/ })
-      .selectOption({ label: 'Cranioplasty' });
-    await page
-      .getByRole('combobox', { name: /^Fixation holes \/ mounting\*/ })
-      .selectOption({ label: 'None' });
-    await page.getByRole('spinbutton', { name: /^Width/ }).fill('50');
-    await page
-      .getByRole('textbox', { name: 'Case description', exact: true })
-      .fill(
-        `${caseCode}: Synthetic UAT Agency own-request test. No patient data; not for clinical use.`,
-      );
-    await page
-      .getByRole('textbox', { name: 'Delivery recipient*', exact: true })
-      .fill('UAT Recipient');
-    await page
-      .getByRole('textbox', { name: 'Ship to*', exact: true })
-      .fill('UAT test address - do not ship');
-    const ct = { ...syntheticCtRoundTwo, name: `${caseCode}-synthetic-ct.zip` };
-    await page.locator('input[type="file"][accept*=".dcm"]').setInputFiles(ct);
-    await expect(page.getByText(ct.name, { exact: true }).first()).toBeVisible();
-    await test.info().attach('own-request-before-submit', {
-      body: await page.screenshot({ fullPage: true }),
-      contentType: 'image/png',
-    });
-  });
-
   await page.getByRole('button', { name: 'Submit request', exact: true }).first().click();
   const confirmation = page.getByRole('alertdialog', { name: 'Submit this request?', exact: true });
   await confirmation
@@ -153,14 +51,56 @@ test('TC-AG-009: Agency own request follows the full flow to COMPLETED and is bi
 }) => {
   test.setTimeout(300_000);
   const agencyContext = await browser.newContext({ baseURL });
+  const managerContext = await browser.newContext({ baseURL });
+  const manager = await managerContext.newPage();
+  manager.setDefaultTimeout(15_000);
+  const addedRules: string[] = [];
+  const rule = (size: string) =>
+    manager
+      .getByRole('row')
+      .filter({ has: manager.getByRole('cell', { name: 'Cranial', exact: true }) })
+      .filter({ has: manager.getByRole('cell', { name: 'PEEK', exact: true }) })
+      .filter({ has: manager.getByRole('cell', { name: size, exact: true }) });
+  async function openContract() {
+    await manager.goto('/manager/pricing');
+    await manager.getByRole('button', { name: 'Agency contract pricing', exact: true }).click();
+    await Promise.all([
+      waitForGraphqlResponse(manager, 'AgencyPricing'),
+      manager.getByRole('button', { name: 'Agency A', exact: true }).click(),
+    ]);
+    await expect(manager.getByRole('heading', { name: 'Agency A', exact: true })).toBeVisible();
+  }
   try {
+    await signIn(manager, USERS.manager);
+    await openContract();
+    for (const size of ['Small', 'Medium', 'Large', 'Extra']) {
+      if (await rule(size).count()) continue;
+      await manager.getByRole('button', { name: '+ Add adjustment', exact: true }).click();
+      await manager
+        .getByRole('combobox', { name: 'Product item', exact: true })
+        .selectOption({ label: 'Cranial' });
+      await manager
+        .getByRole('combobox', { name: 'Material', exact: true })
+        .selectOption({ label: 'PEEK' });
+      await manager
+        .getByRole('combobox', { name: 'Size bucket', exact: true })
+        .selectOption({ label: size });
+      await manager
+        .getByRole('combobox', { name: 'Type', exact: true })
+        .selectOption({ label: 'Percent' });
+      await manager.getByRole('textbox', { name: 'New adjustment value', exact: true }).fill('0');
+      addedRules.push(size);
+      await manager.getByRole('button', { name: 'Add', exact: true }).click();
+      await expect(rule(size)).toBeVisible();
+    }
+
     const agencyPage = await agencyContext.newPage();
     const caseCode = `TC-AG-009-${randomUUID().slice(0, 8)}`;
-    const agencyUser = await login(agencyPage, USERS.agency);
+    const agencyUser = await signIn(agencyPage, USERS.agency);
     const requestId = await createAgencyOwnRequest(agencyPage, caseCode);
     test.info().annotations.push({ type: 'request', description: requestId });
     await agencyPage.close();
-    await login(page, USERS.counselor);
+    await signIn(page, USERS.counselor);
     await test.step('Prepare a fresh request and accept its sources', async () => {
       await page.goto('/counselor/requests');
       await page.getByRole('searchbox', { name: /^Search request no\./ }).fill(requestId);
@@ -224,13 +164,15 @@ test('TC-AG-009: Agency own request follows the full flow to COMPLETED and is bi
     ).toHaveCount(0);
     const partnerPage = await agencyContext.newPage();
     await partnerPage.goto(`/requests/${requestId}/model`);
-    await partnerPage.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    const decision = partnerPage.getByRole('region', { name: 'Final case decision', exact: true });
+    await expect(decision).toContainText('This decision applies to v1.');
+    await decision.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     const approval = partnerPage.getByRole('alertdialog', {
       name: 'Approve this design?',
       exact: true,
     });
     await approval.getByRole('checkbox', { name: /^I reviewed/ }).check();
-    await approval.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    await approval.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     await expect(approval).toBeHidden();
     const approved = await openCounselorRequest(page, requestId);
     expect(approved.details.status).toBe('DESIGN_CONFIRMED');
@@ -243,10 +185,7 @@ test('TC-AG-009: Agency own request follows the full flow to COMPLETED and is bi
     await handoff.getByRole('checkbox', { name: /^I confirm the approved design/ }).check();
     await handoff.getByRole('button', { name: 'Handoff to production', exact: true }).click();
     await expect(handoff).toBeHidden();
-    const managerContext = await browser.newContext({ baseURL });
-    try {
-      const manager = await managerContext.newPage();
-      await login(manager, USERS.manager);
+    {
       async function operations() {
         const [response] = await Promise.all([
           waitForGraphqlResponse(manager, 'RequestOperations'),
@@ -257,10 +196,14 @@ test('TC-AG-009: Agency own request follows the full flow to COMPLETED and is bi
         return body.data.requestOperations;
       }
       const dispatch = manager.getByRole('button', { name: 'Record shipment', exact: true });
-      const production = manager.getByRole('dialog', { name: 'Production details', exact: true });
+      const production = manager.getByRole('dialog', { name: 'Cranial · PEEK', exact: true });
       await operations();
       await test.step('Complete synthetic production and record the required pre-shipment call check', async () => {
         await manager.getByRole('button', { name: 'Update production', exact: true }).click();
+        await manager
+          .getByRole('dialog', { name: 'Production details', exact: true })
+          .getByRole('button', { name: 'Edit', exact: true })
+          .click();
         await production
           .getByRole('combobox', { name: 'Production status*', exact: true })
           .selectOption('DONE');
@@ -368,15 +311,21 @@ test('TC-AG-009: Agency own request follows the full flow to COMPLETED and is bi
         expect(details).toMatchObject({
           requestNo: requestId,
           status: 'COMPLETED',
-          product: 'PBH',
-          material: 'PEEK',
-          priceSizeBucketLabel: 'Small',
           financialAgencyUserId: null,
           priceCurrency: 'KRW',
         });
-        expect(Number(details.priceBaseAmount)).toBe(900000);
+        expect(details.lines).toHaveLength(1);
+        const line = details.lines[0];
+        expect(line).toMatchObject({ product: 'Cranial', material: 'PEEK' });
+        const selected = line.priceTable.options.find(
+          (option: any) => option.id === line.priceTable.selectedOptionId,
+        );
+        expect(selected).toBeDefined();
+        expect(selected.sizeBucketLabel).toBe('Small');
+        expect(Number(selected.baseAmount)).toBe(900000);
         expect(Number(details.quotedPrice)).toBe(900000);
-        expect(Number(details.priceAdjustmentPercent ?? 0)).toBe(0);
+        expect(Number(selected.adjustmentPercent ?? 0)).toBe(0);
+        expect(Number(selected.adjustmentAmount ?? 0)).toBe(0);
         const period = { year: Number(shipDate.slice(0, 4)), month: Number(shipDate.slice(5, 7)) };
         const [capture] = await Promise.all([
           waitForGraphqlResponse(manager, 'BillingSummary').then(async (r) => ({
@@ -485,10 +434,21 @@ test('TC-AG-009: Agency own request follows the full flow to COMPLETED and is bi
           result: 'PASSED',
         }),
       );
-    } finally {
-      await managerContext.close();
     }
   } finally {
-    await agencyContext.close();
+    test.setTimeout(test.info().timeout + 30_000);
+    try {
+      for (const size of addedRules) {
+        await openContract();
+        await rule(size).getByRole('button', { name: 'Remove rule', exact: true }).click();
+        const confirmation = manager.getByRole('alertdialog');
+        await confirmation.getByRole('button', { name: 'Remove rule', exact: true }).click();
+        await expect(confirmation).toBeHidden();
+        await expect(rule(size)).toHaveCount(0);
+      }
+    } finally {
+      await managerContext.close();
+      await agencyContext.close();
+    }
   }
 });

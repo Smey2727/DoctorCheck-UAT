@@ -27,15 +27,15 @@ test('TC-HP-020: Approved Drawing downloads and opens for the approved revision'
   );
   expect(drawings).toHaveLength(1);
   const drawing = drawings[0];
-  const approvedRevision = request.attachments.find(
-    (a: any) => a.id === drawing.sourceAttachmentId,
-  );
+  expect(drawing.designSources).toHaveLength(1);
+  const source = drawing.designSources[0];
+  const approvedRevision = request.attachments.find((a: any) => a.id === source.sourceAttachmentId);
   expect(approvedRevision).toMatchObject({ category: 'DESIGN_RESULT', version: 2 });
   expect(drawing.generatedFile).toMatchObject({
     contentType: 'application/pdf',
     status: 'AVAILABLE',
   });
-  expect(drawing.file.originalName).toBe(approvedRevision.file.originalName);
+  expect(source.file.originalName).toBe(approvedRevision.file.originalName);
   await page.getByRole('button', { name: /^Files & 3D(?:,|$)/ }).click();
   await expect(
     page.getByRole('heading', { name: 'Files & 3D deliverables', exact: true }),
@@ -98,7 +98,7 @@ test('TC-HP-020: Approved Drawing downloads and opens for the approved revision'
     request: REQUEST,
     approvedRevision: approvedRevision.version,
     document: drawing.documentNo,
-    sourceFile: drawing.file.originalName,
+    sourceFile: source.file.originalName,
     downloadSucceeded: true,
     pdfPages: parsed.pages,
     pdfText: parsed.text,

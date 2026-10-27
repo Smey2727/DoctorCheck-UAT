@@ -7,7 +7,7 @@ import { syntheticCtRoundTwo } from '../../helpers/synthetic-ct';
 
 async function priceInput(page: Page) {
   await page.goto('/manager/pricing');
-  await expect(page.getByRole('heading', { name: 'Cranium / PEEK', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cranial / PEEK', exact: true })).toBeVisible();
   return page
     .getByRole('row')
     .filter({ has: page.getByRole('cell', { name: 'Small', exact: true }) })
@@ -34,56 +34,48 @@ async function snapshot(page: Page, requestId: string) {
   ]);
   expect(body.errors).toBeUndefined();
   const details = body.data.request.details;
-  expect(details).toMatchObject({
-    requestNo: requestId,
-    status: 'SUBMITTED',
-    product: 'Cranium',
-    material: 'PEEK',
-    priceSizeBucketLabel: 'Small',
-  });
-  expect(Number(details.quotedPrice)).toBeGreaterThan(0);
+  expect(details).toMatchObject({ requestNo: requestId, status: 'SUBMITTED' });
+  expect(details.lines).toHaveLength(1);
+  const line = details.lines[0];
+  expect(line).toMatchObject({ product: 'Cranial', material: 'PEEK' });
+  const table = line.priceTable;
+  expect(table.options).toHaveLength(4);
+  expect(table.selectedOptionId).toBeNull();
+  const small = table.options.find((option: any) => option.sizeBucketLabel === 'Small');
+  expect(small).toBeDefined();
+  expect(Number(small.baseAmount)).toBeGreaterThan(0);
+  expect(Number(small.calculatedAmount)).toBeGreaterThan(0);
   await expect(
-    page.getByRole('heading', { name: `Request ${requestId}`, exact: true }),
+    page.getByRole('heading', { name: 'Request ' + requestId, exact: true }),
   ).toBeVisible();
-  const data = {
-    priceBaseAmount: details.priceBaseAmount,
-    quotedPrice: details.quotedPrice,
-    priceCurrency: details.priceCurrency,
-    priceSizeBucketLabel: details.priceSizeBucketLabel,
-    priceAdjustmentType: details.priceAdjustmentType,
-    priceAdjustmentPercent: details.priceAdjustmentPercent,
-    priceAdjustmentAmount: details.priceAdjustmentAmount,
-    priceCalculatedAt: details.priceCalculatedAt,
-    financialAgencyUserId: details.financialAgencyUserId,
+  return {
+    data: {
+      lines: details.lines,
+      smallBaseAmount: small.baseAmount,
+      smallCalculatedAmount: small.calculatedAmount,
+      quotedPrice: details.quotedPrice,
+      priceCurrency: details.priceCurrency,
+      financialAgencyUserId: details.financialAgencyUserId,
+    },
   };
-  const base = await page
-    .getByRole('term')
-    .filter({ hasText: /^Base price$/ })
-    .locator('xpath=following-sibling::dd[1]')
-    .allTextContents();
-  const quote = await page
-    .getByRole('term')
-    .filter({ hasText: /^Calculated quote$/ })
-    .locator('xpath=following-sibling::dd[1]')
-    .allTextContents();
-  expect(base).toHaveLength(1);
-  expect(quote.length).toBeGreaterThan(0);
-  return { data, base, quote };
 }
-
 test('TC-HP-007: A submitted request keeps its saved price and agency after a Manager price change', async ({
   page,
   browser,
+  baseURL,
 }) => {
   test.setTimeout(90_000);
   page.setDefaultTimeout(15_000);
   await signIn(page, 'hospital.b@saerosoft.com');
-  await page.goto('/partner/new');
-  const agencyOption = page
-    .getByRole('combobox', { name: /^Financial agency\*/ })
-    .getByRole('option', { name: 'Agency B Distribution', exact: true });
-  await expect(agencyOption).toHaveCount(1);
-  const agencyId = (await agencyOption.getAttribute('value'))!;
+  const [agencyBody] = await Promise.all([
+    waitForGraphqlResponse(page, 'FinancialAgency').then((response) => response.json()),
+    page.goto('/partner/new'),
+  ]);
+  expect(agencyBody.errors).toBeUndefined();
+  expect(agencyBody.data.financialAgency).toMatchObject({
+    organizationName: 'Agency B Distribution',
+  });
+  const agencyId = agencyBody.data.financialAgency.id;
   expect(agencyId).toBeTruthy();
   const code = `TC-HP-007-${randomUUID().slice(0, 8)}`;
   const requestId = await createHospitalReworkRequest(
@@ -101,7 +93,7 @@ test('TC-HP-007: A submitted request keeps its saved price and agency after a Ma
   const billingBefore = await billing.innerText();
   test.info().annotations.push({ type: 'request', description: requestId });
 
-  const context = await browser.newContext();
+  const context = await browser.newContext({ baseURL });
   const manager = await context.newPage();
   manager.setDefaultTimeout(15_000);
   try {
@@ -145,7 +137,7 @@ test('TC-HP-007: A submitted request keeps its saved price and agency after a Ma
         console.log(
           JSON.stringify({
             requestId,
-            savedPrice: before.data.quotedPrice,
+            savedSmallPrice: before.data.smallCalculatedAmount,
             agency: billingBefore,
             originalBasePrice: original,
             temporaryBasePrice: changed,
@@ -153,6 +145,7 @@ test('TC-HP-007: A submitted request keeps its saved price and agency after a Ma
         );
       });
     } finally {
+      test.setTimeout(test.info().timeout + 30_000);
       await test.step('Restore and verify the original base price', async () => {
         if ((await (await priceInput(manager)).inputValue()) !== original) {
           await savePrice(manager, original);

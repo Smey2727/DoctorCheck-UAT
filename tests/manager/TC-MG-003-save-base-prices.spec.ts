@@ -18,8 +18,8 @@ test('TC-MG-003: Base prices are saved for every size in KRW', async ({ page }) 
   await signIn(page, USERS.manager);
   await page.getByRole('link', { name: 'Pricing', exact: true }).click();
 
-  // Verify Cranium / PEEK price table is shown
-  await expect(page.getByRole('heading', { name: 'Cranium / PEEK' })).toBeVisible();
+  // Verify the current Cranial / PEEK price table is shown.
+  await expect(page.getByRole('heading', { name: 'Cranial / PEEK', exact: true })).toBeVisible();
 
   for (const [size, price] of Object.entries(PRICES)) {
     // Find the row for this size

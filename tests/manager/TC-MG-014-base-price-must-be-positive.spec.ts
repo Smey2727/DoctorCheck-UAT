@@ -13,7 +13,7 @@ test('TC-MG-014: Zero and negative base prices are rejected without changing the
   const save = page.getByRole('button', { name: 'Save all', exact: true });
   async function openPricing() {
     await page.goto('/manager/pricing');
-    await expect(page.getByRole('heading', { name: 'Cranium / PEEK', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Cranial / PEEK', exact: true })).toBeVisible();
     await expect(input).not.toHaveValue('');
   }
   await openPricing();
@@ -75,12 +75,12 @@ test('TC-MG-014: Zero and negative base prices are rejected without changing the
     }
     await test.info().attach('positive-base-price-results', {
       body: JSON.stringify(
-        { product: 'Cranium', material: 'PEEK', size: 'Small', results },
+        { product: 'Cranial', material: 'PEEK', size: 'Small', results },
         null,
         2,
       ),
       contentType: 'application/json',
     });
-    console.log(JSON.stringify({ product: 'Cranium / PEEK', size: 'Small', results }));
+    console.log(JSON.stringify({ product: 'Cranial / PEEK', size: 'Small', results }));
   }
 });

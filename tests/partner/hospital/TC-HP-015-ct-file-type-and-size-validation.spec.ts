@@ -25,20 +25,32 @@ test.describe.serial('TC-HP-015: CT file picker', () => {
     await expect(input).toHaveCount(1);
     const [chooser] = await Promise.all([
       page.waitForEvent('filechooser'),
-      input.evaluate((e) => (e as HTMLInputElement).click()),
+      page
+        .getByRole('group', { name: 'CT file', exact: true })
+        .getByRole('button', { name: 'Choose file', exact: true })
+        .click(),
     ]);
     const accept = await chooser.element().getAttribute('accept');
     const formats = accept!.split(',').map((value) => value.trim().toLowerCase());
-    expect(formats).toEqual(['.zip', '.dcm', 'application/zip']);
+    expect(formats.sort()).toEqual(
+      [
+        '.zip',
+        '.dcm',
+        '.dicom',
+        'application/zip',
+        'application/x-zip-compressed',
+        'application/dicom',
+      ].sort(),
+    );
     expect(chooser.isMultiple()).toBe(false);
     for (const unsupported of ['.txt', '.exe', '.pdf', '.jpg', '.png', '*/*']) {
       expect(formats).not.toContain(unsupported);
     }
     await chooser.setFiles([]);
-    await expect(page.locator('input[name="ctFileId"]')).toHaveValue('');
+    await expect(input).toHaveValue('');
     const result = {
       accept,
-      supportedExtensions: ['.zip', '.dcm'],
+      supportedExtensions: ['.zip', '.dcm', '.dicom'],
       unsupportedExtensionsExcluded: true,
       nativeExplorerVisuallyInspected: false,
       sizeValidation: 'Outside clarified picker-filter scope',
@@ -55,39 +67,24 @@ test.describe.serial('TC-HP-015: CT file picker', () => {
 
   test('A valid synthetic CT ZIP can be selected and uploaded', async () => {
     await page.goto('/partner/new');
-    const input = page.locator('input[type="file"][accept*=".dcm"]');
     const [chooser] = await Promise.all([
       page.waitForEvent('filechooser'),
-      input.evaluate((e) => (e as HTMLInputElement).click()),
+      page
+        .getByRole('group', { name: 'CT file', exact: true })
+        .getByRole('button', { name: 'Choose file', exact: true })
+        .click(),
     ]);
     const [prepared] = await Promise.all([
       waitForGraphqlResponse(page, 'PrepareFileUpload').then((response) => response.json()),
       chooser.setFiles({ ...syntheticCtRoundTwo, name: 'tc-hp-015-valid-synthetic-ct.zip' }),
     ]);
-    const cooldown = prepared.errors?.find((e: any) => e.extensions?.code === 'RATE_LIMITED');
-    if (cooldown) {
-      await expect(page.getByRole('alert')).toHaveText(cooldown.message);
-      await test.info().attach('upload-cooldown', {
-        body: JSON.stringify(
-          { message: cooldown.message, retryAfterSeconds: cooldown.extensions.retryAfterSeconds },
-          null,
-          2,
-        ),
-        contentType: 'application/json',
-      });
-      console.log(
-        JSON.stringify({
-          validFileUpload: 'BLOCKED',
-          retryAfterSeconds: cooldown.extensions.retryAfterSeconds,
-        }),
-      );
-      test.skip(
-        true,
-        'Upload service cooldown prevents checking valid-file acceptance; chooser filter was verified separately.',
-      );
-    }
     expect(prepared.errors).toBeUndefined();
-    await expect(page.locator('input[name="ctFileId"]')).not.toHaveValue('');
+
+    const uploaded = page.getByRole('group', { name: 'CT file', exact: true });
+    await expect(
+      uploaded.getByText('Uploaded: tc-hp-015-valid-synthetic-ct.zip', { exact: true }),
+    ).toBeVisible();
+    await expect(uploaded.getByRole('button', { name: 'Replace', exact: true })).toBeEnabled();
     await expect(
       page.getByText('tc-hp-015-valid-synthetic-ct.zip', { exact: true }).first(),
     ).toBeVisible();

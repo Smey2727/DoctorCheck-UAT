@@ -36,29 +36,40 @@ test('TC-CS-017: Counselor cannot edit Hospital request data during design', asy
     const submitted = await openCounselorRequest(page, requestId);
     expect(submitted.details.status).toBe('SUBMITTED');
     expect(submitted.details).toMatchObject({
-      product: 'Cranium',
-      material: 'Titanium',
-      priceSizeBucketLabel: 'Small',
       financialAgencyUserId: null,
-      surgeryType: 'Cranioplasty',
       surgeon: 'Dr. UAT Test',
+      patientName: caseCode,
     });
+    expect(submitted.details.lines).toHaveLength(1);
+    expect(submitted.details.lines[0]).toMatchObject({ product: 'Cranial', material: 'Titanium' });
+    // Pricing can change during design; the hospital's product selection cannot.
+    const productSelections = (lines: Record<string, unknown>[]) =>
+      lines.map(({ id, lineNo, materialId, productItemId, detailTypeId, product, material }) => ({
+        id,
+        lineNo,
+        materialId,
+        productItemId,
+        detailTypeId,
+        product,
+        material,
+      }));
     const hospitalFields = [
-      'detailTypeId',
-      'product',
-      'productCategory',
-      'material',
-      'priceSizeBucketLabel',
       'financialAgencyUserId',
       'agencyNames',
       'surgeryDate',
-      'surgeryType',
       'surgeon',
       'requester',
-      'patientCode',
+      'patientName',
       'caseDescription',
-      'fixationHoles',
-      'optionValues',
+      'hospitalId',
+      'departmentId',
+      'caseContact',
+      'shippingAddress',
+      'recipientName',
+      'recipientContact',
+      'deliveryMethod',
+      'deliveryNotes',
+      'neededBy',
     ];
     await test.step('Prepare a fresh request and accept its sources', async () => {
       await page.goto('/counselor/requests');
@@ -137,17 +148,16 @@ test('TC-CS-017: Counselor cannot edit Hospital request data during design', asy
       await expect(
         page.getByRole('heading', { name: 'Submission summary', exact: true }),
       ).toBeVisible();
-      await expect(page.getByText(/^submitted values .* locked after review$/)).toBeVisible();
+      expect(initial.details.allowedActions).not.toContain('EDIT_SUBMITTED_FIELDS');
       const field = (label: string) =>
         page
           .getByRole('term')
           .filter({ hasText: new RegExp(`^${label}$`) })
           .locator('xpath=following-sibling::dd[1]');
-      await expect(field('Product')).toHaveText('Cranium / Titanium');
+      await expect(field('Product')).toHaveText('Cranial / Titanium');
       await expect(field('Surgeon')).toHaveText(submitted.details.surgeon);
       await expect(field('Requester')).toHaveText(submitted.details.requester);
-      await expect(field('Patient')).toHaveText(caseCode);
-      await expect(field('Surgery type')).toHaveText(submitted.details.surgeryType);
+      await expect(field('Patient name')).toHaveText(caseCode);
       const [year, month, day] = submitted.details.surgeryDate.split('-').map(Number);
       await expect(field('Surgery date')).toHaveText(`${month}/${day}/${year}`);
       // These are plain text definitions, not form fields. This also catches
@@ -168,7 +178,14 @@ test('TC-CS-017: Counselor cannot edit Hospital request data during design', asy
       const persisted = await openCounselorRequest(page, requestId);
       expect(persisted.details.status).toBe('PRODUCT_DESIGN');
       expect(persisted.details.statusHistory).toEqual(initial.details.statusHistory);
+      expect(productSelections(persisted.details.lines)).toEqual(
+        productSelections(submitted.details.lines),
+      );
       for (const key of hospitalFields) {
+        expect(
+          submitted.details,
+          `Hospital field ${key} must exist in the baseline`,
+        ).toHaveProperty(key);
         expect(persisted.details[key], `Hospital field ${key} must remain unchanged`).toEqual(
           submitted.details[key],
         );

@@ -94,13 +94,15 @@ test('TC-CS-008: Production handoff is blocked until design approval and creates
     ).toHaveCount(0);
     const partnerPage = await hospitalContext.newPage();
     await partnerPage.goto(`/requests/${requestId}/model`);
-    await partnerPage.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    const decision = partnerPage.getByRole('region', { name: 'Final case decision', exact: true });
+    await expect(decision).toContainText('This decision applies to v1.');
+    await decision.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     const approval = partnerPage.getByRole('alertdialog', {
       name: 'Approve this design?',
       exact: true,
     });
     await approval.getByRole('checkbox', { name: /^I reviewed/ }).check();
-    await approval.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    await approval.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     await expect(approval).toBeHidden();
     const approved = await openCounselorRequest(page, requestId);
     expect(approved.details.status).toBe('DESIGN_CONFIRMED');
@@ -144,8 +146,19 @@ test('TC-CS-008: Production handoff is blocked until design approval and creates
       (document: { documentType: string }) => document.documentType === 'APPROVED_DRAWING',
     );
     expect(drawing).toBeDefined();
-    expect(workOrders[0].sourceAttachmentId).toBeTruthy();
-    expect(workOrders[0].sourceAttachmentId).toBe(drawing.sourceAttachmentId);
+    const approvedDesign = request.details.attachments.find(
+      (attachment: { category: string; version: number }) =>
+        attachment.category === 'DESIGN_RESULT' && attachment.version === 1,
+    );
+    expect(approvedDesign).toBeDefined();
+    expect(workOrders[0].sourceAttachmentId).toBe(approvedDesign.id);
+    // Approved drawings now collect design sources per request line.
+    expect(drawing.designSources).toHaveLength(1);
+    expect(drawing.designSources[0]).toMatchObject({
+      requestLineId: workOrders[0].requestLineId,
+      sourceAttachmentId: approvedDesign.id,
+      file: { id: approvedDesign.file.id, originalName: `${caseCode}-design-v1.stl` },
+    });
     await expect(requestStatus(verificationPage, requestId, 'Production handoff')).toBeVisible();
     await verificationPage.getByRole('button', { name: /^Docs,/ }).click();
     const workOrder = verificationPage.getByRole('listitem').filter({ hasText: 'Work Order' });

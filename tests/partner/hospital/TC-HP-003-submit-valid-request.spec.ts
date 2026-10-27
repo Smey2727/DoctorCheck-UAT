@@ -53,7 +53,8 @@ test('TC-HP-003: Valid submission creates an Info Sheet, notifies both roles and
         .getByRole('row')
         .filter({ has: counselor.getByRole('cell', { name: requestId, exact: true }) });
       await expect(row).toHaveCount(1);
-      await expect(row.getByRole('cell', { name: 'Submitted', exact: true })).toBeVisible();
+
+      await expect(row.getByRole('button', { name: 'Submitted', exact: true })).toBeVisible();
       await expect(row.getByRole('cell', { name: 'Unassigned', exact: true })).toBeVisible();
       await expect(row.getByRole('button', { name: 'Claim', exact: true })).toBeEnabled();
       evidence.counselorQueue = 'SUBMITTED / Unassigned';

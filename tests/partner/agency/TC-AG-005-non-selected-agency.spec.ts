@@ -47,7 +47,7 @@ test('TC-AG-005: Non-selected Agency 1 cannot list, open or see bills for Agency
 }) => {
   test.setTimeout(120_000);
   page.setDefaultTimeout(15_000);
-  const patientCodes = new Map<string, string>();
+  const patientNames = new Map<string, string>();
 
   const selectedAgencyId =
     await test.step('Selected Agency 2 can access both Hospital B requests and the existing bill', async () => {
@@ -60,7 +60,7 @@ test('TC-AG-005: Non-selected Agency 1 cannot list, open or see bills for Agency
           hospital: 'Hospital B Medical Center',
           financialAgencyUserId: selected.id,
         });
-        patientCodes.set(requestNo, body.data.request.details.patientCode);
+        patientNames.set(requestNo, body.data.request.details.patientName);
         await expect(page.getByRole('heading', { name: requestNo, exact: true })).toBeVisible();
       }
       const groups = await septemberBilling(page);
@@ -96,20 +96,17 @@ test('TC-AG-005: Non-selected Agency 1 cannot list, open or see bills for Agency
     expect(user.id).not.toBe(selectedAgencyId);
 
     await test.step('Both request numbers are absent from Agency 1 search results', async () => {
-      await agency.goto('/account');
-      await agency.goto('/partner/requests');
-      await Promise.all([
-        waitForGraphqlResponse(agency, 'Requests').then((response) => response.json()),
-        agency.getByRole('button', { name: /^All(?:,|$)/ }).click(),
+      const [initial] = await Promise.all([
+        waitForGraphqlResponse(agency, 'Requests'),
+        agency.goto('/partner/requests'),
       ]);
-      await expect(
-        agency.getByRole('combobox', { name: 'Status', exact: true }).locator('option:checked'),
-      ).toHaveText('All statuses');
-      await expect(
-        agency
-          .getByRole('combobox', { name: 'Last updated', exact: true })
-          .locator('option:checked'),
-      ).toHaveText('Any time');
+      const {
+        page: _page,
+        size: _size,
+        ...filters
+      } = initial.request().postDataJSON().variables.input;
+      // Search all submitted requests, without status or date restrictions.
+      expect(filters).toEqual({ partnerView: 'SUBMITTED' });
       for (const requestNo of REQUESTS) {
         const [body] = await Promise.all([
           agency
@@ -120,7 +117,9 @@ test('TC-AG-005: Non-selected Agency 1 cannot list, open or see bills for Agency
                 JSON.stringify(r.request().postDataJSON()?.variables).includes(requestNo),
             )
             .then((response) => response.json()),
-          agency.getByPlaceholder('Search request no - patient - product').fill(requestNo),
+          agency
+            .getByPlaceholder('Search patient, Hospital, doctor, or request no.')
+            .fill(requestNo),
         ]);
         expect(body.errors).toBeUndefined();
         expect(body.data.requests.items).toHaveLength(0);
@@ -150,8 +149,8 @@ test('TC-AG-005: Non-selected Agency 1 cannot list, open or see bills for Agency
           'You do not have permission to perform this action.',
         );
         await expect(agency.getByRole('heading', { name: requestNo, exact: true })).toHaveCount(0);
-        expect(patientCodes.get(requestNo)).toBeTruthy();
-        await expect(agency.locator('body')).not.toContainText(patientCodes.get(requestNo)!);
+        expect(patientNames.get(requestNo)).toBeTruthy();
+        await expect(agency.locator('body')).not.toContainText(patientNames.get(requestNo)!);
         await test.info().attach(`${requestNo}-denied`, {
           body: await agency.screenshot(),
           contentType: 'image/png',

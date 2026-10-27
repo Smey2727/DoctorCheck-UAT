@@ -18,7 +18,10 @@ async function agencyRecord(page: Page) {
       const body = await r.json().catch(() => null);
       return body?.data?.agency?.displayName === AGENCY;
     }),
-    page.goto('/manager/agencies'),
+    (async () => {
+      await page.goto('/manager/agencies');
+      await page.getByRole('button', { name: /^Agency A Agency A Distribution / }).click();
+    })(),
   ]);
   const body = await response.json();
   expect(body.errors).toBeUndefined();
@@ -40,14 +43,14 @@ function billingAccount(page: Page) {
     .filter({ hasText: /^Billing account$/ })
     .locator('xpath=following-sibling::dd[1]');
 }
-async function newFormAgencies(page: Page) {
+async function newFormAgency(page: Page) {
   const [body] = await Promise.all([
-    waitForGraphqlResponse(page, 'FinancialAgencies').then((response) => response.json()),
+    waitForGraphqlResponse(page, 'FinancialAgency').then((response) => response.json()),
     page.goto('/partner/new'),
   ]);
   expect(body.errors).toBeUndefined();
   await expect(page.getByRole('heading', { name: 'New Request', exact: true })).toBeVisible();
-  return body.data.financialAgencies;
+  return body.data.financialAgency;
 }
 async function requestSnapshot(page: Page) {
   const [body] = await Promise.all([
@@ -60,7 +63,7 @@ async function requestSnapshot(page: Page) {
   return {
     financialAgencyUserId: fields.financialAgencyUserId,
     agencyNames: fields.agencyNames,
-    priceBaseAmount: fields.priceBaseAmount,
+    lines: fields.lines,
     quotedPrice: fields.quotedPrice,
     priceCurrency: fields.priceCurrency,
     priceCalculatedAt: fields.priceCalculatedAt,
@@ -77,6 +80,7 @@ test('TC-MG-009: Duplicate connections are blocked and deactivation preserves th
   baseURL,
 }) => {
   test.setTimeout(120_000);
+  page.setDefaultTimeout(15_000);
   await signIn(page, USERS.manager);
   const original = await agencyRecord(page);
   const connections = original.agency.members.filter(
@@ -87,6 +91,7 @@ test('TC-MG-009: Duplicate connections are blocked and deactivation preserves th
   const before = await requestSnapshot(page);
   expect(before.financialAgencyUserId).toBe(original.agency.id);
   const hospitalContext = await browser.newContext({ baseURL });
+  hospitalContext.setDefaultTimeout(15_000);
   const addInput = {
     agencyUserId: original.agency.id,
     memberUserId: member.memberUserId,
@@ -105,13 +110,12 @@ test('TC-MG-009: Duplicate connections are blocked and deactivation preserves th
   try {
     const hospitalPage = await hospitalContext.newPage();
     await signIn(hospitalPage, HOSPITAL_LOGIN);
-    const available = await newFormAgencies(hospitalPage);
-    expect(available.some((a: any) => a.id === original.agency.id)).toBe(true);
-    await expect(
-      hospitalPage
-        .getByRole('combobox', { name: /^Financial agency\*/ })
-        .getByRole('option', { name: original.agency.organizationName, exact: true }),
-    ).toHaveCount(1);
+    const available = await newFormAgency(hospitalPage);
+    expect(available.id).toBe(original.agency.id);
+    await expect(hospitalPage.getByRole('textbox', { name: /^Financial agency/ })).toHaveValue(
+      original.agency.organizationName,
+    );
+    await expect(hospitalPage.getByRole('textbox', { name: /^Financial agency/ })).toBeDisabled();
     await hospitalPage.goto(`/partner/requests/${OLD_REQUEST}`);
     await expect(
       hospitalPage.getByRole('heading', { name: OLD_REQUEST, exact: true }),
@@ -126,20 +130,20 @@ test('TC-MG-009: Duplicate connections are blocked and deactivation preserves th
         name: 'Add a partner user to Agency A',
         exact: true,
       });
+      await dialog.getByRole('button', { name: 'Partner member', exact: true }).click();
       await dialog
-        .getByRole('textbox', {
-          name: 'Search by hospital, department, name, or email',
+        .getByRole('searchbox', {
+          name: 'Find a partner',
           exact: true,
         })
         .fill(HOSPITAL_LOGIN);
       await expect(
-        dialog
-          .getByRole('combobox', { name: 'Partner member', exact: true })
-          .locator(`option[value="${member.memberUserId}"]`),
+        dialog.getByRole('button', { name: new RegExp(HOSPITAL_LOGIN.replaceAll('.', '\\.')) }),
       ).toHaveCount(0);
-      await expect(
-        dialog.getByRole('combobox', { name: 'Partner member', exact: true }),
-      ).toHaveValue('');
+      await expect(dialog.getByRole('button', { name: 'Partner member', exact: true })).toHaveText(
+        'Select partner',
+      );
+      await expect(dialog.getByRole('button', { name: 'Add user', exact: true })).toBeDisabled();
       await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
       const duplicate = await addConnection();
       expect(duplicate.errors).toEqual(
@@ -170,13 +174,9 @@ test('TC-MG-009: Duplicate connections are blocked and deactivation preserves th
       ).toMatchObject({ active: false });
     });
     await test.step('New form excludes the agency but the old request retains its saved agency', async () => {
-      const after = await newFormAgencies(hospitalPage);
-      expect(after.some((a: any) => a.id === original.agency.id)).toBe(false);
-      await expect(
-        hospitalPage
-          .getByRole('combobox', { name: /^Financial agency\*/ })
-          .getByRole('option', { name: original.agency.organizationName, exact: true }),
-      ).toHaveCount(0);
+      const after = await newFormAgency(hospitalPage);
+      expect(after).toBeNull();
+      await expect(hospitalPage.getByRole('textbox', { name: /^Financial agency/ })).toHaveCount(0);
       expect(await requestSnapshot(page)).toEqual(before);
       await hospitalPage.goto(`/partner/requests/${OLD_REQUEST}`);
       await expect(
@@ -205,9 +205,7 @@ test('TC-MG-009: Duplicate connections are blocked and deactivation preserves th
             customAdjustmentPercent: member.customAdjustmentPercent,
           });
           const verifyPage = await hospitalContext.newPage();
-          expect(
-            (await newFormAgencies(verifyPage)).some((a: any) => a.id === original.agency.id),
-          ).toBe(true);
+          expect((await newFormAgency(verifyPage)).id).toBe(original.agency.id);
         });
       }
     } finally {

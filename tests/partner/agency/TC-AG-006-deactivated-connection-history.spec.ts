@@ -88,11 +88,11 @@ function savedFields(details: any) {
   return {
     requestNo: details.requestNo,
     hospital: details.hospital,
-    patientCode: details.patientCode,
+    patientName: details.patientName,
     status: details.status,
     financialAgencyUserId: details.financialAgencyUserId,
     quotedPrice: details.quotedPrice,
-    priceBaseAmount: details.priceBaseAmount,
+    lines: details.lines,
     priceCurrency: details.priceCurrency,
     priceCalculatedAt: details.priceCalculatedAt,
   };
@@ -124,6 +124,8 @@ test('TC-AG-006: Agency 2 retains historical request access after its Hospital B
     financialAgencyUserId: original.agency.id,
   });
   const saved = savedFields(before);
+  expect(saved.patientName).toBeTruthy();
+  expect(saved.lines.length).toBeGreaterThan(0);
   let restore = false;
   const evidence: Record<string, unknown> = {
     requestNo: REQUEST_NO,
@@ -176,7 +178,7 @@ test('TC-AG-006: Agency 2 retains historical request access after its Hospital B
       const after = await openRequest(agency, 'partner');
       expect(savedFields(after)).toEqual(agencySaved);
       await expect(agency.getByRole('heading', { name: REQUEST_NO, exact: true })).toBeVisible();
-      await expect(agency.locator('main')).toContainText(before.patientCode);
+      await expect(agency.locator('main')).toContainText(before.patientName);
       const billing = agency
         .getByRole('term')
         .filter({ hasText: /^Billing account$/ })

@@ -19,16 +19,18 @@ test('TC-HP-014: Draft fields and CT file survive logout and login until submiss
   const code = `TC-HP-014-${randomUUID().slice(0, 8)}`;
   const ct = { ...syntheticCtRoundTwo, name: `${code}-ct.zip` };
   await prepareHospitalReworkRequest(page, code, ct, undefined, 'PEEK');
-  await page.getByRole('textbox', { name: 'Requesting surgeon*', exact: true }).fill('');
-  await page.getByRole('combobox', { name: /^Surgery type\*/ }).selectOption('');
+  await page.getByRole('textbox', { name: 'Responsible doctor*', exact: true }).fill('Dr. ' + code);
+  const surgeryDate = page.getByRole('textbox', { name: /^Planned surgery date\*/ });
+  const plannedDate = await surgeryDate.inputValue();
+  await surgeryDate.fill('');
   await page
     .getByRole('textbox', { name: 'Delivery notes', exact: true })
     .fill(`${code}: Synthetic receiving instructions.`);
   const textFields = [
-    'Requesting surgeon*',
+    'Responsible doctor*',
     'Requester / coordinator*',
     'Case contact',
-    'Patient code*',
+    'Patient name*',
     'Planned surgery date*',
     'Case description',
     'Delivery recipient*',
@@ -36,27 +38,15 @@ test('TC-HP-014: Draft fields and CT file survive logout and login until submiss
     'Ship to*',
     'Delivery notes',
   ];
-  const selections = [
-    /^Product target\*/,
-    /^Material\*/,
-    /^Detail type\*/,
-    /^Financial agency\*/,
-    /^Size bucket\*/,
-    /^Surgery type\*/,
-  ];
+  const product = page.getByRole('button', { name: 'Product', exact: true });
+  const selectedProduct = await product.innerText();
+  const assignedAgency = page.getByRole('textbox', { name: /^Financial agency/ });
+  const agencyName = await assignedAgency.inputValue();
   const textValues = await Promise.all(
     textFields.map((name) => page.getByRole('textbox', { name: fieldName(name) }).inputValue()),
   );
-  const selectedValues = await Promise.all(
-    selections.map((name) => page.getByRole('combobox', { name }).inputValue()),
-  );
   const [saved] = await Promise.all([
-    page
-      .waitForResponse(
-        (r) =>
-          r.url().endsWith('/graphql') && /mutation/.test(r.request().postDataJSON()?.query ?? ''),
-      )
-      .then((response) => response.json()),
+    waitForGraphqlResponse(page, 'SaveRequestDraft').then((response) => response.json()),
     page
       .getByRole('button', { name: /^Save draft$/i })
       .first()
@@ -65,17 +55,17 @@ test('TC-HP-014: Draft fields and CT file survive logout and login until submiss
   expect(saved.errors).toBeUndefined();
   expect(saved.data.saveRequestDraft.status).toBe('DRAFT');
   await expect(page).toHaveURL(/\/partner\/requests$/);
-  await page.getByRole('button', { name: /^Drafts(?:,|$)/ }).click();
-  await page.getByPlaceholder('Search request no - patient - product').fill(code);
-  const draftRow = page.getByRole('row').filter({ hasText: code });
+  await page.getByRole('link', { name: /^Drafts/ }).click();
+  await page.getByPlaceholder('Search patient, Hospital, doctor, or request no.').fill(code);
+  const requestId = saved.data.saveRequestDraft.requestNo;
+  const resumeLink = page.locator('a[href="/partner/requests/' + requestId + '/edit"]');
+  const draftRow = page.getByRole('listitem').filter({ has: resumeLink });
   await expect(draftRow).toHaveCount(1);
-  const requestId = (await draftRow.getByRole('cell').first().innerText()).trim();
-  expect(requestId).toBe(saved.data.saveRequestDraft.requestNo);
   test.info().annotations.push({ type: 'request', description: requestId });
   await expect(draftRow.getByRole('button', { name: 'Draft', exact: true })).toBeVisible();
   const [beforeBody] = await Promise.all([
     waitForGraphqlResponse(page, 'Request').then((response) => response.json()),
-    draftRow.getByRole('link', { name: 'Resume', exact: true }).click(),
+    resumeLink.click(),
   ]);
   expect(beforeBody.errors).toBeUndefined();
   const before = beforeBody.data.request.details;
@@ -87,12 +77,12 @@ test('TC-HP-014: Draft fields and CT file survive logout and login until submiss
   await signOut(page);
   await signIn(page, 'hospital.a@saerosoft.com');
   await page.goto('/partner/requests');
-  await page.getByRole('button', { name: /^Drafts(?:,|$)/ }).click();
-  await page.getByPlaceholder('Search request no - patient - product').fill(code);
+  await page.getByRole('link', { name: /^Drafts/ }).click();
+  await page.getByPlaceholder('Search patient, Hospital, doctor, or request no.').fill(code);
   await expect(draftRow.getByRole('button', { name: 'Draft', exact: true })).toBeVisible();
   const [resumedBody] = await Promise.all([
     waitForGraphqlResponse(page, 'Request').then((response) => response.json()),
-    draftRow.getByRole('link', { name: 'Resume', exact: true }).click(),
+    resumeLink.click(),
   ]);
   expect(resumedBody.errors).toBeUndefined();
   const resumed = resumedBody.data.request.details;
@@ -103,7 +93,7 @@ test('TC-HP-014: Draft fields and CT file survive logout and login until submiss
       .filter((a: any) => a.category === 'CT')
       .map((a: any) => ({ id: a.id, fileId: a.file.id })),
   ).toEqual(originalCt.map((a: any) => ({ id: a.id, fileId: a.file.id })));
-  await expect(page.getByRole('textbox', { name: 'Patient code*', exact: true })).toHaveValue(code);
+  await expect(page.getByRole('textbox', { name: /^Patient name\*/ })).toHaveValue(code);
   await test.step('Entered fields and original attached CT survive the new login', async () => {
     await expect(page.getByRole('heading', { name: 'Resume Draft', exact: true })).toBeVisible();
     for (let i = 0; i < textFields.length; i++) {
@@ -111,24 +101,17 @@ test('TC-HP-014: Draft fields and CT file survive logout and login until submiss
         textValues[i],
       );
     }
-    for (let i = 0; i < selections.length; i++) {
-      await expect(page.getByRole('combobox', { name: selections[i] })).toHaveValue(
-        selectedValues[i],
-      );
-    }
+    await expect(product).toHaveText(selectedProduct);
+    await expect(assignedAgency).toHaveValue(agencyName);
+    await expect(assignedAgency).toBeDisabled();
     await expect(page.getByText(ct.name, { exact: true }).first()).toBeVisible();
     await test.info().attach('resumed-draft-with-fields-and-file', {
       body: await page.screenshot(),
       contentType: 'image/png',
     });
   });
-  await test.step('Completing the missing fields and submitting moves the same draft to SUBMITTED', async () => {
-    await page
-      .getByRole('textbox', { name: 'Requesting surgeon*', exact: true })
-      .fill('Dr. UAT Test');
-    await page
-      .getByRole('combobox', { name: /^Surgery type\*/ })
-      .selectOption({ label: 'Cranioplasty' });
+  await test.step('Completing the missing surgery date and submitting moves the same draft to SUBMITTED', async () => {
+    await surgeryDate.fill(plannedDate);
     await page.getByRole('button', { name: 'Submit request', exact: true }).first().click();
     const confirmation = page.getByRole('alertdialog', {
       name: 'Submit this request?',
@@ -172,7 +155,7 @@ test('TC-HP-014: Draft fields and CT file survive logout and login until submiss
     const result = {
       requestId,
       statusAfterNewLogin: 'DRAFT',
-      enteredFieldsPreserved: textFields.length + selections.length,
+      enteredFieldsPreserved: textFields.length + 2,
       originalCtPreserved: true,
       finalStatus: 'SUBMITTED',
     };

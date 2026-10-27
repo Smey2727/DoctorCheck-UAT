@@ -13,25 +13,27 @@ async function requestSnapshot(page: Page) {
   ]);
   expect(body.errors).toBeUndefined();
   const details = body.data.request.details;
-  expect(details).toMatchObject({
-    requestNo: REQUEST,
+  expect(details.requestNo).toBe(REQUEST);
+  expect(details.lines).toHaveLength(1);
+  const line = details.lines[0];
+  expect(line).toMatchObject({
     product: 'Cranium',
     material: 'PEEK',
-    priceSizeBucketLabel: 'Small',
   });
-  expect(details.priceBaseAmount).not.toBeNull();
-  expect(details.quotedPrice).not.toBeNull();
+  const selectedPrice = line.priceTable.options.find(
+    (option: { id: string }) => option.id === line.priceTable.selectedOptionId,
+  );
+  expect(selectedPrice).toBeDefined();
+  expect(selectedPrice.sizeBucketLabel).toBe('Small');
+  expect(Number(selectedPrice.baseAmount)).toBeGreaterThan(0);
+  expect(Number(details.quotedPrice)).toBeGreaterThan(0);
   await expect(
     page.getByRole('heading', { name: `Request ${REQUEST}`, exact: true }),
   ).toBeVisible();
   const data = {
-    priceBaseAmount: details.priceBaseAmount,
+    lines: details.lines,
     quotedPrice: details.quotedPrice,
     priceCurrency: details.priceCurrency,
-    priceSizeBucketLabel: details.priceSizeBucketLabel,
-    priceAdjustmentType: details.priceAdjustmentType,
-    priceAdjustmentPercent: details.priceAdjustmentPercent,
-    priceAdjustmentAmount: details.priceAdjustmentAmount,
     priceCalculatedAt: details.priceCalculatedAt,
     financialAgencyUserId: details.financialAgencyUserId,
   };
@@ -92,7 +94,7 @@ async function billSnapshot(page: Page) {
 
 async function priceInput(page: Page) {
   await page.goto('/manager/pricing');
-  await expect(page.getByRole('heading', { name: 'Cranium / PEEK', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cranial / PEEK', exact: true })).toBeVisible();
   return page
     .getByRole('row')
     .filter({ has: page.getByRole('cell', { name: 'Small', exact: true }) })

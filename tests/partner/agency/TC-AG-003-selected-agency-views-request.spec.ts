@@ -38,7 +38,7 @@ test('TC-AG-003: Selected Agency 2 can view Hospital B request without edit, can
   test.setTimeout(90_000);
   page.setDefaultTimeout(15_000);
   let selectedAgencyId: string;
-  let patientCode: string;
+  let patientName: string;
   let requestStatus: string;
 
   await test.step('Verify Hospital B owns the request and has cancellation rights', async () => {
@@ -46,10 +46,10 @@ test('TC-AG-003: Selected Agency 2 can view Hospital B request without edit, can
     const details = await openRequest(page);
     expect(details).toMatchObject({ requestNo: REQUEST_NO, hospital: 'Hospital B Medical Center' });
     selectedAgencyId = details.financialAgencyUserId;
-    patientCode = details.patientCode;
+    patientName = details.patientName;
     requestStatus = details.status;
     expect(selectedAgencyId).toBeTruthy();
-    expect(patientCode).toBeTruthy();
+    expect(patientName).toBeTruthy();
     const billing = page
       .getByRole('term')
       .filter({ hasText: /^Billing account$/ })
@@ -74,10 +74,10 @@ test('TC-AG-003: Selected Agency 2 can view Hospital B request without edit, can
         requestNo: REQUEST_NO,
         hospital: 'Hospital B Medical Center',
         financialAgencyUserId: user.id,
-        patientCode,
+        patientName,
         status: requestStatus,
       });
-      await expect(agency.locator('main')).toContainText(patientCode);
+      await expect(agency.locator('main')).toContainText(patientName);
       await expectViewOnlyControls(agency);
       await test.info().attach('agency-request-summary', {
         body: await agency.screenshot({ fullPage: true }),
@@ -104,7 +104,7 @@ test('TC-AG-003: Selected Agency 2 can view Hospital B request without edit, can
     await test.step('View access and missing mutation controls persist after reload', async () => {
       await agency.reload();
       await expect(agency.getByRole('heading', { name: REQUEST_NO, exact: true })).toBeVisible();
-      await expect(agency.locator('main')).toContainText(patientCode);
+      await expect(agency.locator('main')).toContainText(patientName);
       await expectViewOnlyControls(agency);
       const result = {
         requestId: REQUEST_NO,

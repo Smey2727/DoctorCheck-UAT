@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { waitForGraphqlResponse } from '../../helpers/graphql';
 import { signIn } from '../../helpers/auth';
 
-test('TC-HP-004: Hospital C without an agency sees the PBH PEEK Small base price and direct billing', async ({
+test('TC-HP-004: Hospital C without an agency sees the Cranial PEEK Small base price and direct billing', async ({
   page,
 }) => {
   test.setTimeout(60_000);
@@ -10,34 +10,34 @@ test('TC-HP-004: Hospital C without an agency sees the PBH PEEK Small base price
   const user = await signIn(page, 'hospital.c@saerosoft.com');
   expect(user.role).toBe('PARTNER');
   const [agenciesBody] = await Promise.all([
-    waitForGraphqlResponse(page, 'FinancialAgencies').then((response) => response.json()),
+    waitForGraphqlResponse(page, 'FinancialAgency').then((response) => response.json()),
     page.goto('/partner/new'),
   ]);
   expect(agenciesBody.errors).toBeUndefined();
-  expect(agenciesBody.data.financialAgencies).toHaveLength(0);
+  expect(agenciesBody.data.financialAgency).toBeNull();
   await expect(page.getByRole('heading', { name: 'New Request', exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: /^Hospital Set from your account/ })).toHaveValue(
     'Hospital C Medical Center',
   );
-  await page
-    .getByRole('combobox', { name: 'Product target*', exact: true })
-    .selectOption({ label: 'PBH' });
-  await page.getByRole('combobox', { name: /^Material\*/ }).selectOption({ label: 'PEEK' });
-  await page
-    .getByRole('combobox', { name: /^Detail type\*/ })
-    .selectOption({ label: 'PBH - PEEK' });
-  const size = page.getByRole('combobox', { name: /^Size bucket\*/ });
-  const small = size.getByRole('option', { name: /^Small\b/ });
-  await expect(small).toHaveCount(1);
-  await size.selectOption((await small.getAttribute('value'))!);
-  await expect(size.locator('option:checked')).toHaveText(/^Small\b/);
+  const product = page.getByRole('button', { name: 'Product', exact: true });
+  await expect(product).toBeVisible();
+  if ((await product.getAttribute('aria-expanded')) !== 'true') await product.click();
+  await page.getByRole('button', { name: 'Cranial Cranium - PEEK', exact: true }).click();
+  await page.getByText('Prices by size', { exact: true }).click();
+
   await expect(
     page.getByRole('combobox', { name: /Financial agency|Billing account/i }),
   ).toHaveCount(0);
   await expect(
     page.getByText('Direct billing to this partner account', { exact: true }),
   ).toBeVisible();
-  const price = page.getByText(/KRW\s*900,000(?:\.00)?/).first();
+  const price = page
+    .getByRole('group')
+    .filter({ hasText: 'Prices by size' })
+    .getByRole('listitem')
+    .filter({ hasText: /^Small / });
+  await expect(price).toHaveCount(1);
+  await expect(price).toHaveText(/^Small .*KRW\s*900,000[.]00$/);
   await expect(price).toBeVisible();
   await price.scrollIntoViewIfNeeded();
   await test.info().attach('direct-hospital-base-price', {
@@ -48,7 +48,7 @@ test('TC-HP-004: Hospital C without an agency sees the PBH PEEK Small base price
     body: JSON.stringify(
       {
         hospital: 'Hospital C Medical Center',
-        product: 'PBH',
+        product: 'Cranial',
         material: 'PEEK',
         size: 'Small',
         activeAgencies: 0,
@@ -64,7 +64,7 @@ test('TC-HP-004: Hospital C without an agency sees the PBH PEEK Small base price
   console.log(
     JSON.stringify({
       hospital: 'Hospital C',
-      product: 'PBH / PEEK / Small',
+      product: 'Cranial / PEEK / Small',
       basePrice: '900000.00',
       currency: 'KRW',
       agencySelectorPresent: false,

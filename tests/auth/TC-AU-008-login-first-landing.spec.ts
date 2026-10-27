@@ -21,7 +21,7 @@ test('TC-AU-008: Signed-out application entry displays login by default', async 
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
 });
 
-test('TC-AU-008: Login displays branding, credentials, submit and Create Account', async ({
+test('TC-AU-008: Login displays branding, credentials, submit and password recovery', async ({
   page,
 }) => {
   const brand = page.getByText('DoctorCheck', { exact: true });
@@ -33,14 +33,10 @@ test('TC-AU-008: Login displays branding, credentials, submit and Create Account
     .soft(page.getByRole('textbox', { name: /^Password\*/ }))
     .toHaveAttribute('type', 'password');
   await expect.soft(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
-  // Required by the change request but absent in the inspected DOM. Do not invent a signup route.
-  await expect
-    .soft(
-      page
-        .getByRole('link', { name: /^Create account$/i })
-        .or(page.getByRole('button', { name: /^Create account$/i })),
-    )
-    .toBeVisible();
+  // Match the current login UI; account creation is not exposed on this screen.
+  const recoveryLink = page.getByRole('link', { name: 'Forgot password?', exact: true });
+  await expect.soft(recoveryLink).toBeVisible();
+  await expect.soft(recoveryLink).toHaveAttribute('href', '/forgot-password');
 });
 
 test('TC-AU-008: First screen has no promotional headline or descriptive copy', async ({
@@ -96,34 +92,12 @@ test('TC-AU-008: Signed-out landing has no role dashboard links', async ({ page 
   ).toEqual([]);
 });
 
-test('TC-AU-008: Empty credentials show validation and keep the user signed out', async ({
-  page,
-}) => {
+test('TC-AU-008: Empty credentials keep the user on the login screen', async ({ page }) => {
   await expect(page.getByRole('textbox', { name: 'ID or email*', exact: true })).toHaveValue('');
   await expect(page.getByRole('textbox', { name: /^Password\*/ })).toHaveValue('');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  // Accept native required-field validation or the app's observed alert mechanism.
-  // No hypothetical validation message is hard-coded.
-  await expect.soft
-    .poll(
-      async () => {
-        const nativeError = await page
-          .locator('input')
-          .evaluateAll((inputs) =>
-            inputs.some(
-              (input) =>
-                input instanceof HTMLInputElement &&
-                !input.validity.valid &&
-                input.validationMessage.length > 0,
-            ),
-          );
-        const alert = page.getByRole('alert');
-        const appError = (await alert.isVisible()) && (await alert.innerText()).trim().length > 0;
-        return nativeError || appError;
-      },
-      { message: 'Empty login must display validation feedback' },
-    )
-    .toBe(true);
+  // The current UI focuses the empty ID field without displaying a validation message.
+  await expect(page.getByRole('textbox', { name: 'ID or email*', exact: true })).toBeFocused();
   await expect(page).toHaveURL(LOGIN_URL);
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
 });

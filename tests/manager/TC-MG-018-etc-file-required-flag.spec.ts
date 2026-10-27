@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { signIn, USERS } from '../helpers/auth';
+import { prepareHospitalReworkRequest } from '../helpers/requests';
+import { syntheticCtRoundTwo } from '../helpers/synthetic-ct';
 
 test('TC-MG-018: Partner ETC requirement follows the detail type flag while CT stays required', async ({
   page,
@@ -16,7 +18,7 @@ test('TC-MG-018: Partner ETC requirement follows the detail type flag while CT s
   async function openDetail() {
     await page.goto('/manager/reference-data');
     await page.getByRole('button', { name: 'Detail types', exact: true }).click();
-    await page.getByRole('button', { name: /^Cranium \/ Cranium \/ PEEK / }).click();
+    await page.getByRole('button', { name: 'Cranial / Cranial / PEEK', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Display name*', exact: true })).toHaveValue(
       'Cranium - PEEK',
     );
@@ -52,29 +54,39 @@ test('TC-MG-018: Partner ETC requirement follows the detail type flag while CT s
     for (const required of [true, false]) {
       await test.step(`ETC ${required ? 'required' : 'optional'} reaches a freshly opened Partner form; CT remains required`, async () => {
         await setRequired(required);
-        await partner.goto('/partner/new');
+        await prepareHospitalReworkRequest(
+          partner,
+          'TC-MG-018 synthetic validation',
+          null,
+          undefined,
+          'PEEK',
+        );
+        const ct = partner.getByRole('group', { name: 'CT file', exact: true });
+        const etc = partner.getByRole('group', { name: 'ETC files', exact: true });
+        const submit = partner.getByRole('button', { name: 'Submit request', exact: true }).first();
+        await submit.click();
+        await expect(ct).toHaveAttribute('aria-invalid', 'true');
+        await expect(partner.getByRole('alertdialog')).toHaveCount(0);
         await partner
-          .getByRole('combobox', { name: 'Product target*', exact: true })
-          .selectOption({ label: 'Cranium' });
-        await partner
-          .getByRole('combobox', { name: /^Material\*/ })
-          .selectOption({ label: 'PEEK' });
-        await partner
-          .getByRole('combobox', { name: /^Detail type\*/ })
-          .selectOption({ label: 'Cranium - PEEK' });
-        const ct = partner
-          .locator('label')
-          .filter({ has: partner.getByText('CT file', { exact: true }) });
-        const etc = partner
-          .locator('label')
-          .filter({ has: partner.getByText('ETC files', { exact: true }) });
-        await expect(ct.getByText('REQUIRED', { exact: true })).toBeVisible();
-        await expect(
-          etc.getByText(required ? 'REQUIRED' : 'NOT REQUIRED', { exact: true }),
-        ).toBeVisible();
-        await expect(
-          etc.getByText(required ? 'NOT REQUIRED' : 'REQUIRED', { exact: true }),
-        ).toHaveCount(0);
+          .locator('input[type="file"][accept*=".dcm"]')
+          .setInputFiles(syntheticCtRoundTwo);
+        await submit.click();
+        const confirmation = partner.getByRole('alertdialog', {
+          name: 'Submit this request?',
+          exact: true,
+        });
+        if (required) {
+          await expect(confirmation).toHaveCount(0);
+          await expect(etc).toHaveAttribute('aria-invalid', 'true');
+          await etc.locator('input[type="file"]').setInputFiles({
+            name: 'TC-MG-018-support.txt',
+            mimeType: 'text/plain',
+            buffer: Buffer.from('Synthetic UAT supporting file; no patient data.'),
+          });
+          await submit.click();
+        }
+        await expect(confirmation).toBeVisible();
+        await confirmation.getByRole('button', { name: 'Continue editing', exact: true }).click();
         await etc.scrollIntoViewIfNeeded();
         await test.info().attach(`etc-${required ? 'required' : 'optional'}`, {
           body: await partner.screenshot(),
@@ -88,6 +100,7 @@ test('TC-MG-018: Partner ETC requirement follows the detail type flag while CT s
       });
     }
   } finally {
+    test.setTimeout(test.info().timeout + 30_000);
     try {
       await setRequired(original);
       await test.info().attach('file-requirement-results', {

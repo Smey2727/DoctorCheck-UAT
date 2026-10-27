@@ -1,49 +1,50 @@
-import { expect, test } from '@playwright/test';
+﻿import { expect, test } from '@playwright/test';
 import { signIn, signOut, USERS } from '../helpers/auth';
+import { prepareHospitalReworkRequest } from '../helpers/requests';
 
-// TC-MG-002: Add request fields
-// Surgery type (pick one, required), Fixation holes (required), Width 5-120 mm
-// Expected: fields shown on Partner form with required flag and limits
-
-test('TC-MG-002: Required request fields and width limits are available to partners', async ({
-  page,
-}) => {
-  // Sign in as Hospital Partner and open New Request
+// TC-MG-002 now covers the current partner request form. Legacy surgery-type,
+// fixation-hole and width-limit requirements were retired from this test.
+test('TC-MG-002: Current required request fields validate before submission', async ({ page }) => {
   await signIn(page, USERS.hospital);
-  await page.getByRole('link', { name: 'New Request', exact: true }).click();
+  const patientName = 'TC-MG-002 synthetic validation';
+  await prepareHospitalReworkRequest(page, patientName, undefined, undefined, 'PEEK');
 
-  // Select product PBH, material PEEK, detail type PBH - PEEK
-  await page.getByLabel('Product target*').selectOption({ label: 'PBH' });
-  await page.getByLabel('Material*').selectOption({ label: 'PEEK' });
-  await page.getByLabel('Detail type*').selectOption({ label: 'PBH - PEEK' });
+  for (const name of [
+    'Responsible doctor*',
+    'Requester / coordinator*',
+    'Planned surgery date*',
+    'Delivery recipient*',
+    'Ship to*',
+  ]) {
+    await expect(page.getByRole('textbox', { name, exact: true })).toBeVisible();
+    await expect(page.getByRole('textbox', { name, exact: true })).toBeEditable();
+  }
+  await expect(
+    page.getByRole('combobox', { name: 'Material*', exact: true }).locator('option:checked'),
+  ).toHaveText('PEEK');
+  await expect(page.getByRole('combobox', { name: 'Product*', exact: true })).toHaveValue(
+    'Cranial',
+  );
+  const patient = page.getByRole('textbox', { name: /^Patient name\*/ });
+  await expect(patient).toHaveValue(patientName);
+  await patient.fill('');
+  await page.getByRole('button', { name: 'Submit request', exact: true }).first().click();
+  await expect(page.getByText('Patient name is required.', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/partner\/new$/);
+  const confirmation = page.getByRole('alertdialog', { name: 'Submit this request?', exact: true });
+  await expect(confirmation).toBeHidden();
 
-  // Verify Surgery type is required (* in label) with its choices
-  const surgeryType = page.getByRole('combobox', { name: /^Surgery type\*/ });
-  await expect(surgeryType).toBeEnabled();
-  await expect(surgeryType.locator('option')).toContainText([
-    'Reconstruction',
-    'Cranioplasty',
-    'Revision',
-  ]);
-
-  // Verify Fixation holes is required (* in label) with its choices
-  const fixationHoles = page.getByRole('combobox', { name: /^Fixation holes \/ mounting\*/ });
-  await expect(fixationHoles).toBeVisible();
-  await expect(fixationHoles.locator('option')).toContainText(['None', '4 holes', '6 holes']);
-
-  // Verify Width limits are 5-120 mm
-  const width = page.getByRole('spinbutton', { name: /^Width/ });
-  await expect(width).toHaveAttribute('min', '5.000');
-  await expect(width).toHaveAttribute('max', '120.000');
-
-  // Verify Width outside the limits is rejected (4 and 121) and inside is accepted (50)
-  await width.fill('4');
-  expect(await width.evaluate((el: HTMLInputElement) => el.validity.rangeUnderflow)).toBe(true);
-  await width.fill('121');
-  expect(await width.evaluate((el: HTMLInputElement) => el.validity.rangeOverflow)).toBe(true);
-  await width.fill('50');
-  expect(await width.evaluate((el: HTMLInputElement) => el.validity.valid)).toBe(true);
-
-  // Sign out (nothing is saved)
+  await patient.fill(patientName);
+  await page.getByRole('button', { name: 'Submit request', exact: true }).first().click();
+  await expect(confirmation).toBeVisible();
+  const submit = confirmation.getByRole('button', { name: 'Submit request', exact: true });
+  await expect(submit).toBeDisabled();
+  await confirmation
+    .getByRole('checkbox', { name: /^I reviewed the case details and files/ })
+    .check();
+  await expect(submit).toBeEnabled();
+  // Stop at confirmation: this validation test does not create a request.
+  await confirmation.getByRole('button', { name: 'Continue editing', exact: true }).click();
+  await expect(confirmation).toBeHidden();
   await signOut(page);
 });

@@ -1,4 +1,4 @@
-import { Page, expect } from '@playwright/test';
+import { Page, expect, test } from '@playwright/test';
 import { waitForGraphqlResponse } from './graphql';
 
 // Resolve login against the same baseURL as the rest of the test.
@@ -51,10 +51,31 @@ export async function signIn(page: Page, email: string, password = PASSWORD) {
   await expect(passwordBox).toHaveAttribute('type', 'password');
 
   // Read the login body before any subsequent full-page navigation can discard it.
-  const [loginBody] = await Promise.all([
-    waitForGraphqlResponse(page, 'Login').then((response) => response.json()),
-    page.getByRole('button', { name: 'Sign in', exact: true }).click(),
-  ]);
+  async function submitLogin() {
+    const [body] = await Promise.all([
+      waitForGraphqlResponse(page, 'Login').then((response) => response.json()),
+      page.getByRole('button', { name: 'Sign in', exact: true }).click(),
+    ]);
+    return body;
+  }
+  let loginBody = await submitLogin();
+  const errors = loginBody.errors;
+  const cooldown = Number(errors?.[0]?.extensions?.retryAfterSeconds);
+  if (
+    errors?.length === 1 &&
+    errors[0].extensions?.code === 'RATE_LIMITED' &&
+    Number.isFinite(cooldown) &&
+    cooldown > 0 &&
+    cooldown <= 900
+  ) {
+    // Respect the server's cooldown once; other errors still fail immediately.
+    const waitMs = Math.ceil(cooldown * 1000) + 1000;
+    const info = test.info();
+    if (info.timeout > 0) info.setTimeout(info.timeout + waitMs);
+    console.log(`Login rate limited; waiting ${Math.ceil(waitMs / 1000)}s before one retry.`);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    loginBody = await submitLogin();
+  }
   expect(loginBody.errors).toBeUndefined();
   const user = loginBody.data.login.user;
 

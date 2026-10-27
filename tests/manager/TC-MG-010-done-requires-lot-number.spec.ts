@@ -90,13 +90,15 @@ test('TC-MG-010: Production DONE requires a lot number', async ({ page, browser,
     ).toHaveCount(0);
     const partnerPage = await hospitalContext.newPage();
     await partnerPage.goto(`/requests/${requestId}/model`);
-    await partnerPage.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    const decision = partnerPage.getByRole('region', { name: 'Final case decision', exact: true });
+    await expect(decision).toContainText('This decision applies to v1.');
+    await decision.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     const approval = partnerPage.getByRole('alertdialog', {
       name: 'Approve this design?',
       exact: true,
     });
     await approval.getByRole('checkbox', { name: /^I reviewed/ }).check();
-    await approval.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    await approval.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     await expect(approval).toBeHidden();
     const approved = await openCounselorRequest(page, requestId);
     expect(approved.details.status).toBe('DESIGN_CONFIRMED');
@@ -126,7 +128,14 @@ test('TC-MG-010: Production DONE requires a lot number', async ({ page, browser,
         'PRODUCTION_HANDOFF',
       );
       expect((await operations()).productionStatus).toBe('PENDING');
-      const dialog = manager.getByRole('dialog', { name: 'Production details', exact: true });
+      async function openProduction() {
+        await manager.getByRole('button', { name: 'Update production', exact: true }).click();
+        await manager
+          .getByRole('dialog', { name: 'Production details', exact: true })
+          .getByRole('button', { name: 'Edit', exact: true })
+          .click();
+      }
+      const dialog = manager.getByRole('dialog', { name: 'Cranial · Titanium', exact: true });
       const productionStatus = dialog.getByRole('combobox', {
         name: 'Production status*',
         exact: true,
@@ -134,7 +143,7 @@ test('TC-MG-010: Production DONE requires a lot number', async ({ page, browser,
       const lot = dialog.getByRole('textbox', { name: /^Lot number/ });
       const save = dialog.getByRole('button', { name: 'Save production', exact: true });
       await test.step('Save IN_PRODUCTION without a lot number and verify persistence', async () => {
-        await manager.getByRole('button', { name: 'Update production', exact: true }).click();
+        await openProduction();
         await productionStatus.selectOption('IN_PRODUCTION');
         await lot.fill('');
         await save.click();
@@ -143,7 +152,7 @@ test('TC-MG-010: Production DONE requires a lot number', async ({ page, browser,
         expect(saved.productionStatus).toBe('IN_PRODUCTION');
       });
       await test.step('DONE without a lot number is blocked and saved status is unchanged', async () => {
-        await manager.getByRole('button', { name: 'Update production', exact: true }).click();
+        await openProduction();
         await expect(lot).toHaveValue('');
         await productionStatus.selectOption('DONE');
         await lot.fill('');
@@ -174,7 +183,7 @@ test('TC-MG-010: Production DONE requires a lot number', async ({ page, browser,
       });
       const lotNumber = `${caseCode}-UAT-ONLY`;
       await test.step('DONE with a lot number succeeds and persists', async () => {
-        await manager.getByRole('button', { name: 'Update production', exact: true }).click();
+        await openProduction();
         await expect(lot).toHaveValue('');
         await productionStatus.selectOption('DONE');
         await lot.fill(lotNumber);
@@ -182,7 +191,7 @@ test('TC-MG-010: Production DONE requires a lot number', async ({ page, browser,
         await expect(dialog).toBeHidden();
         const saved = await operations();
         expect(saved.productionStatus).toBe('DONE');
-        await manager.getByRole('button', { name: 'Update production', exact: true }).click();
+        await openProduction();
         await expect(productionStatus).toHaveValue('DONE');
         await expect(lot).toHaveValue(lotNumber);
         await test.info().attach('saved-production', {

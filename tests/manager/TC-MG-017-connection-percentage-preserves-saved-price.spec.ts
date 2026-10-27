@@ -18,7 +18,10 @@ async function agencyRecord(page: Page) {
       const body = await r.json().catch(() => null);
       return body?.data?.agency?.displayName === AGENCY;
     }),
-    page.goto('/manager/agencies'),
+    (async () => {
+      await page.goto('/manager/agencies');
+      await page.getByRole('button', { name: /^Agency A Agency A Distribution / }).click();
+    })(),
   ]);
   const body = await response.json();
   expect(body.errors).toBeUndefined();
@@ -45,7 +48,7 @@ async function requestSnapshot(page: Page) {
   return {
     financialAgencyUserId: fields.financialAgencyUserId,
     agencyNames: fields.agencyNames,
-    priceBaseAmount: fields.priceBaseAmount,
+    lines: fields.lines,
     quotedPrice: fields.quotedPrice,
     priceCurrency: fields.priceCurrency,
     priceCalculatedAt: fields.priceCalculatedAt,
@@ -72,6 +75,22 @@ test('TC-MG-017: Connection percentage changes apply only to new requests and pr
   hospitalContext.setDefaultTimeout(15_000);
   counselorContext.setDefaultTimeout(15_000);
   let changed = false;
+  const addedRules: string[] = [];
+  const contractRow = (size: string) =>
+    page
+      .getByRole('row')
+      .filter({ has: page.getByRole('cell', { name: 'Cranial', exact: true }) })
+      .filter({ has: page.getByRole('cell', { name: 'PEEK', exact: true }) })
+      .filter({ has: page.getByRole('cell', { name: size, exact: true }) });
+  async function openContract() {
+    await page.goto('/manager/pricing');
+    await page.getByRole('button', { name: 'Agency contract pricing', exact: true }).click();
+    await Promise.all([
+      waitForGraphqlResponse(page, 'AgencyPricing'),
+      page.getByRole('button', { name: AGENCY, exact: true }).click(),
+    ]);
+    await expect(page.getByRole('heading', { name: AGENCY, exact: true })).toBeVisible();
+  }
   async function snapshot(requestId: string) {
     const [body] = await Promise.all([
       waitForGraphqlResponse(page, 'Request').then((response) => response.json()),
@@ -79,15 +98,22 @@ test('TC-MG-017: Connection percentage changes apply only to new requests and pr
     ]);
     expect(body.errors).toBeUndefined();
     const details = body.data.request.details;
+    expect(details.lines).toHaveLength(1);
+    const table = details.lines[0].priceTable;
+    // Submission freezes all size prices; the counselor selects a size later.
+    const selected = table.options.find((option: any) => option.sizeBucketLabel === 'Small');
+    expect(selected).toBeDefined();
     return {
       requestNo: details.requestNo,
       financialAgencyUserId: details.financialAgencyUserId,
-      priceBaseAmount: details.priceBaseAmount,
+      lines: details.lines,
+      priceBaseAmount: selected.baseAmount,
+      smallCalculatedPrice: selected.calculatedAmount,
       quotedPrice: details.quotedPrice,
       priceCurrency: details.priceCurrency,
-      priceAdjustmentType: details.priceAdjustmentType,
-      priceAdjustmentPercent: details.priceAdjustmentPercent,
-      priceAdjustmentAmount: details.priceAdjustmentAmount,
+      priceAdjustmentType: selected.adjustmentType,
+      priceAdjustmentPercent: selected.adjustmentPercent,
+      priceAdjustmentAmount: selected.adjustmentAmount,
       priceCalculatedAt: details.priceCalculatedAt,
     };
   }
@@ -117,6 +143,27 @@ test('TC-MG-017: Connection percentage changes apply only to new requests and pr
   }
   const evidence: Record<string, unknown> = {};
   try {
+    await openContract();
+    for (const size of ['Small', 'Medium', 'Large', 'Extra']) {
+      if (await contractRow(size).count()) continue;
+      await page.getByRole('button', { name: '+ Add adjustment', exact: true }).click();
+      await page
+        .getByRole('combobox', { name: 'Product item', exact: true })
+        .selectOption({ label: 'Cranial' });
+      await page
+        .getByRole('combobox', { name: 'Material', exact: true })
+        .selectOption({ label: 'PEEK' });
+      await page
+        .getByRole('combobox', { name: 'Size bucket', exact: true })
+        .selectOption({ label: size });
+      await page
+        .getByRole('combobox', { name: 'Type', exact: true })
+        .selectOption({ label: 'Percent' });
+      await page.getByRole('textbox', { name: 'New adjustment value', exact: true }).fill('0');
+      addedRules.push(size);
+      await page.getByRole('button', { name: 'Add', exact: true }).click();
+      await expect(contractRow(size)).toBeVisible();
+    }
     const hospital = await hospitalContext.newPage();
     await signIn(hospital, HOSPITAL_LOGIN);
     const code = `TC-MG-017-${randomUUID().slice(0, 8)}`;
@@ -132,7 +179,7 @@ test('TC-MG-017: Connection percentage changes apply only to new requests and pr
     expect(Number(before.priceBaseAmount)).toBeGreaterThan(0);
     const percent = Number(before.priceAdjustmentPercent) === -17 ? '-13' : '-17';
     const expectedPrice = (Number(before.priceBaseAmount) * (1 + Number(percent) / 100)).toFixed(2);
-    expect(expectedPrice).not.toBe(before.quotedPrice);
+    expect(expectedPrice).not.toBe(before.smallCalculatedPrice);
     evidence.before = before;
     await test.step('Save Custom percentage and preserve both existing submitted quotes', async () => {
       await agencyRecord(page);
@@ -163,7 +210,7 @@ test('TC-MG-017: Connection percentage changes apply only to new requests and pr
       evidence.newRequest = fresh;
       expect(fresh.financialAgencyUserId).toBe(original.id);
       expect(fresh.priceBaseAmount).toBe(before.priceBaseAmount);
-      expect.soft(fresh.quotedPrice).toBe(expectedPrice);
+      expect.soft(fresh.smallCalculatedPrice).toBe(expectedPrice);
       expect.soft(Number(fresh.priceAdjustmentPercent)).toBe(Number(percent));
       expect(await snapshot(beforeId)).toEqual(before);
     });
@@ -229,6 +276,7 @@ test('TC-MG-017: Connection percentage changes apply only to new requests and pr
       expect(await requestSnapshot(page)).toEqual(historic);
     });
   } finally {
+    test.setTimeout(test.info().timeout + 30_000);
     try {
       if (changed) {
         const restored = await savePolicy(member.pricePolicy, member.customAdjustmentPercent);
@@ -238,6 +286,15 @@ test('TC-MG-017: Connection percentage changes apply only to new requests and pr
           active: true,
         });
         evidence.restored = true;
+      }
+      for (const size of addedRules) {
+        await openContract();
+        await contractRow(size).getByRole('button', { name: 'Remove rule', exact: true }).click();
+        const confirmation = page.getByRole('alertdialog');
+        await confirmation.getByRole('button', { name: 'Remove rule', exact: true }).click();
+        await expect(confirmation).toBeHidden();
+        await expect(contractRow(size)).toHaveCount(0);
+        evidence.temporaryRuleRemoved = true;
       }
       await test.info().attach('connection-pricing-results', {
         body: JSON.stringify(evidence, null, 2),

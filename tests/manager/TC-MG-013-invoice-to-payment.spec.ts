@@ -94,13 +94,15 @@ test('TC-MG-013: Invoice amount and hospital payer persist through PENDING, INVO
     ).toHaveCount(0);
     const partnerPage = await hospitalContext.newPage();
     await partnerPage.goto(`/requests/${requestId}/model`);
-    await partnerPage.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    const decision = partnerPage.getByRole('region', { name: 'Final case decision', exact: true });
+    await expect(decision).toContainText('This decision applies to v1.');
+    await decision.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     const approval = partnerPage.getByRole('alertdialog', {
       name: 'Approve this design?',
       exact: true,
     });
     await approval.getByRole('checkbox', { name: /^I reviewed/ }).check();
-    await approval.getByRole('button', { name: 'Approve v1', exact: true }).click();
+    await approval.getByRole('button', { name: 'Approve design and price', exact: true }).click();
     await expect(approval).toBeHidden();
     const approved = await openCounselorRequest(page, requestId);
     expect(approved.details.status).toBe('DESIGN_CONFIRMED');
@@ -127,10 +129,14 @@ test('TC-MG-013: Invoice amount and hospital payer persist through PENDING, INVO
         return body.data.requestOperations;
       }
       const dispatch = manager.getByRole('button', { name: 'Record shipment', exact: true });
-      const production = manager.getByRole('dialog', { name: 'Production details', exact: true });
+      const production = manager.getByRole('dialog', { name: 'Cranial · Titanium', exact: true });
       await operations();
       await test.step('Complete synthetic production and record the required pre-shipment call check', async () => {
         await manager.getByRole('button', { name: 'Update production', exact: true }).click();
+        await manager
+          .getByRole('dialog', { name: 'Production details', exact: true })
+          .getByRole('button', { name: 'Edit', exact: true })
+          .click();
         await production
           .getByRole('combobox', { name: 'Production status*', exact: true })
           .selectOption('DONE');

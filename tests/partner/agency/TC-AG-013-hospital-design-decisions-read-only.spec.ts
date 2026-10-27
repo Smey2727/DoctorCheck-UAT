@@ -1,10 +1,26 @@
-import { expect, Page, test } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+import { expect, Page, Browser, test } from '@playwright/test';
 import { waitForGraphqlResponse } from '../../helpers/graphql';
-import { signIn } from '../../helpers/auth';
+import { signIn, USERS } from '../../helpers/auth';
+import { createHospitalReworkRequest } from '../../helpers/requests';
+import { syntheticCtRoundTwo } from '../../helpers/synthetic-ct';
+import { syntheticModel } from '../../helpers/synthetic-model';
+import {
+  requestStatus,
+  openCounselorRequest,
+  uploadDesign,
+  shareDesign,
+} from '../../helpers/design-workflow';
 
 async function loadRequest(page: Page, requestNo: string, model = false) {
   const [body] = await Promise.all([
-    waitForGraphqlResponse(page, 'Request').then((response) => response.json()),
+    page
+      .waitForResponse(async (response) => {
+        if (!response.url().endsWith('/graphql')) return false;
+        const body = await response.json().catch(() => null);
+        return body?.data?.request?.details?.requestNo === requestNo;
+      })
+      .then((response) => response.json()),
     page.goto(model ? `/requests/${requestNo}/model` : `/partner/requests/${requestNo}`),
   ]);
   expect(body.errors).toBeUndefined();
@@ -28,62 +44,145 @@ async function expectNoDecisionControls(page: Page) {
   await expect.soft(page.locator('textarea:not([readonly]):not([disabled])')).toHaveCount(0);
 }
 
+async function createReviewFixture(hospital: Page, browser: Browser, baseURL: string | undefined) {
+  const counselorContext = await browser.newContext({ baseURL });
+  counselorContext.setDefaultTimeout(15_000);
+  const counselor = await counselorContext.newPage();
+  const managerContext = await browser.newContext({ baseURL });
+  const manager = await managerContext.newPage();
+  manager.setDefaultTimeout(15_000);
+  const addedRules: string[] = [];
+  const rule = (size: string) =>
+    manager
+      .getByRole('row')
+      .filter({ has: manager.getByRole('cell', { name: 'Cranial', exact: true }) })
+      .filter({ has: manager.getByRole('cell', { name: 'PEEK', exact: true }) })
+      .filter({ has: manager.getByRole('cell', { name: size, exact: true }) });
+  async function openContract() {
+    await manager.goto('/manager/pricing');
+    await manager.getByRole('button', { name: 'Agency contract pricing', exact: true }).click();
+    await Promise.all([
+      waitForGraphqlResponse(manager, 'AgencyPricing'),
+      manager.getByRole('button', { name: 'Agency B', exact: true }).click(),
+    ]);
+    await expect(manager.getByRole('heading', { name: 'Agency B', exact: true })).toBeVisible();
+  }
+  try {
+    await signIn(manager, USERS.manager);
+    await openContract();
+    for (const size of ['Small', 'Medium', 'Large', 'Extra']) {
+      if (await rule(size).count()) continue;
+      await manager.getByRole('button', { name: '+ Add adjustment', exact: true }).click();
+      await manager
+        .getByRole('combobox', { name: 'Product item', exact: true })
+        .selectOption({ label: 'Cranial' });
+      await manager
+        .getByRole('combobox', { name: 'Material', exact: true })
+        .selectOption({ label: 'PEEK' });
+      await manager
+        .getByRole('combobox', { name: 'Size bucket', exact: true })
+        .selectOption({ label: size });
+      await manager
+        .getByRole('combobox', { name: 'Type', exact: true })
+        .selectOption({ label: 'Percent' });
+      await manager.getByRole('textbox', { name: 'New adjustment value', exact: true }).fill('0');
+      addedRules.push(size);
+      await manager.getByRole('button', { name: 'Add', exact: true }).click();
+      await expect(rule(size)).toBeVisible();
+    }
+
+    const caseCode = 'TC-AG-013-' + randomUUID().slice(0, 8);
+    const requestId = await createHospitalReworkRequest(
+      hospital,
+      caseCode,
+      syntheticCtRoundTwo,
+      undefined,
+      'PEEK',
+    );
+    await signIn(counselor, USERS.counselor);
+    await test.step('Prepare a fresh request and accept its sources', async () => {
+      await counselor.goto('/counselor/requests');
+      await counselor.getByRole('searchbox', { name: /^Search request no\./ }).fill(requestId);
+      const row = counselor
+        .getByRole('row')
+        .filter({ has: counselor.getByRole('cell', { name: requestId, exact: true }) });
+      const claim = row.getByRole('button', { name: 'Claim', exact: true });
+      await claim.click();
+      await expect(claim).toBeHidden();
+      await counselor.goto(`/counselor/requests/${requestId}`);
+      await counselor.getByRole('button', { name: 'Start review', exact: true }).click();
+      const note = counselor.getByRole('textbox', {
+        name: 'Optional note for the status history',
+        exact: true,
+      });
+      await note.fill(`${caseCode}: source review`);
+      await note.locator('..').getByRole('button', { name: 'Start review', exact: true }).click();
+      await expect(requestStatus(counselor, requestId, 'In review')).toBeVisible();
+      await expect(async () => {
+        await counselor.reload();
+        await counselor.getByRole('button', { name: /^Submission(?:,|$)/ }).click();
+        await expect(
+          counselor.getByRole('button', { name: 'Accept latest round', exact: true }),
+        ).toBeEnabled({ timeout: 1_000 });
+      }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
+      await counselor.getByRole('button', { name: 'Accept latest round', exact: true }).click();
+      await counselor.getByRole('button', { name: /^Enter design stage$/i }).click();
+      await expect(requestStatus(counselor, requestId, 'Converting 3D')).toBeVisible();
+    });
+    await test.step('Register converted model', async () => {
+      await openCounselorRequest(counselor, requestId, true);
+      const upload = counselor.getByRole('button', { name: 'Upload converted 3D', exact: true });
+      await expect(upload).toBeVisible();
+      const fileChooser = counselor.waitForEvent('filechooser');
+      await upload.click();
+      const [response] = await Promise.all([
+        waitForGraphqlResponse(counselor, 'RegisterDesignFile'),
+        (await fileChooser).setFiles(syntheticModel(`${caseCode}-converted.stl`)),
+      ]);
+      const body = await response.json();
+      expect(body.errors).toBeUndefined();
+      await expect(async () => {
+        const request = await openCounselorRequest(counselor, requestId, true);
+        expect(request.details.allowedActions).toContain('REGISTER_DESIGN_FILE');
+        await expect(
+          counselor.getByRole('button', { name: 'Upload design result', exact: true }),
+        ).toBeVisible();
+      }).toPass({ timeout: 60_000, intervals: [1_000, 2_000, 5_000] });
+    });
+    await test.step('Register and share Revision 1', async () => {
+      await uploadDesign(counselor, requestId, caseCode, 1, 10);
+      await shareDesign(counselor, requestId, caseCode, 1);
+    });
+    expect((await openCounselorRequest(counselor, requestId)).details.status).toBe(
+      'REVIEW_REQUESTED',
+    );
+    return requestId;
+  } finally {
+    test.setTimeout(test.info().timeout + 30_000);
+    try {
+      for (const size of addedRules) {
+        await openContract();
+        await rule(size).getByRole('button', { name: 'Remove rule', exact: true }).click();
+        const confirmation = manager.getByRole('alertdialog');
+        await confirmation.getByRole('button', { name: 'Remove rule', exact: true }).click();
+        await expect(confirmation).toBeHidden();
+        await expect(rule(size)).toHaveCount(0);
+      }
+    } finally {
+      await counselorContext.close();
+      await managerContext.close();
+    }
+  }
+}
 test('TC-AG-013: Selected Agency cannot comment, approve or request revision on a Hospital request at REVIEW_REQUESTED', async ({
   page,
   browser,
   baseURL,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(300_000);
   page.setDefaultTimeout(15_000);
   const hospitalUser = await signIn(page, 'hospital.b@saerosoft.com');
-  await page.goto('/account');
-  await page.goto('/partner/requests');
-  await Promise.all([
-    waitForGraphqlResponse(page, 'Requests').then((response) => response.json()),
-    page.getByRole('button', { name: /^All(?:,|$)/ }).click(),
-  ]);
-  const queueResponse = () =>
-    page
-      .waitForResponse(
-        (r) =>
-          r.url().endsWith('/graphql') &&
-          r.request().postDataJSON()?.operationName === 'Requests' &&
-          JSON.stringify(r.request().postDataJSON()?.variables).includes('REVIEW_REQUESTED'),
-      )
-      .then((response) => response.json());
-  let [body] = await Promise.all([
-    queueResponse(),
-    page.getByRole('combobox', { name: 'Status', exact: true }).selectOption('REVIEW_REQUESTED'),
-  ]);
-  expect(body.errors).toBeUndefined();
-  const candidates: string[] = [];
-  while (true) {
-    expect(body.errors).toBeUndefined();
-    for (const request of body.data.requests.items) {
-      expect(request.status).toBe('REVIEW_REQUESTED');
-      candidates.push(request.requestNo);
-    }
-    if (candidates.length >= body.data.requests.totalCount) {
-      break;
-    }
-    expect(body.data.requests.items.length).toBeGreaterThan(0);
-    [body] = await Promise.all([
-      queueResponse(),
-      page.getByRole('button', { name: 'Next', exact: true }).click(),
-    ]);
-  }
-  if (!candidates.length) {
-    const reason =
-      'TC-AG-013 BLOCKED: Hospital B has no request at REVIEW_REQUESTED. No design-decision privacy checks were executed.';
-    test.info().annotations.push({ type: 'blocked', description: reason });
-    await test.info().attach('no-review-request-fixture', {
-      body: await page.screenshot({ fullPage: true }),
-      contentType: 'image/png',
-    });
-    console.log(reason);
-    test.skip(true, reason);
-    return;
-  }
+  const candidates = [await createReviewFixture(page, browser, baseURL)];
 
   const context = await browser.newContext({ baseURL });
   try {
@@ -91,27 +190,13 @@ test('TC-AG-013: Selected Agency cannot comment, approve or request revision on 
     agency.setDefaultTimeout(15_000);
     const agencyUser = await signIn(agency, 'agency.b@saerosoft.com');
     expect(agencyUser.id).not.toBe(hospitalUser.id);
-    let target: any;
-    for (const requestNo of candidates) {
-      const details = await loadRequest(page, requestNo);
-      expect(details.hospital).toBe('Hospital B Medical Center');
-      if (
-        details.financialAgencyUserId === agencyUser.id &&
-        details.status === 'REVIEW_REQUESTED'
-      ) {
-        target = details;
-        break;
-      }
-    }
-    if (!target) {
-      const reason =
-        "TC-AG-013 BLOCKED: None of Hospital B's REVIEW_REQUESTED requests names Agency 2 as selected payer.";
-      test.info().annotations.push({ type: 'blocked', description: reason });
-      console.log(reason);
-      test.skip(true, reason);
-      return;
-    }
-    const requestNo = target.requestNo;
+    const requestNo = candidates[0];
+    const target = await loadRequest(page, requestNo);
+    expect(target).toMatchObject({
+      hospital: 'Hospital B Medical Center',
+      financialAgencyUserId: agencyUser.id,
+      status: 'REVIEW_REQUESTED',
+    });
     test.info().annotations.push({ type: 'request', description: requestNo });
     await test.step('Hospital owner has comment and design-decision controls at this stage', async () => {
       const owner = await loadRequest(page, requestNo, true);
@@ -119,7 +204,11 @@ test('TC-AG-013: Selected Agency cannot comment, approve or request revision on 
       await expect(
         page.getByRole('textbox', { name: 'Write a comment...', exact: true }),
       ).toBeVisible();
-      await expect(page.getByRole('button', { name: /^Approve v\d+/ }).first()).toBeVisible();
+      await expect(
+        page
+          .getByRole('region', { name: 'Final case decision', exact: true })
+          .getByRole('button', { name: 'Approve v1', exact: true }),
+      ).toBeVisible();
       await expect(
         page.getByRole('button', { name: 'Request revision', exact: true }),
       ).toBeVisible();

@@ -18,7 +18,9 @@ test('TC-HP-009: Hospital comments without changing status and requests a design
   baseURL,
 }) => {
   test.setTimeout(180_000);
+  page.setDefaultTimeout(15_000);
   const hospitalContext = await browser.newContext({ baseURL });
+  hospitalContext.setDefaultTimeout(15_000);
   try {
     const hospitalPage = await hospitalContext.newPage();
     const caseCode = `TC-HP-009-${randomUUID().slice(0, 8)}`;
@@ -89,12 +91,16 @@ test('TC-HP-009: Hospital comments without changing status and requests a design
     await test.step('Posting a comment persists feedback without changing the shared-design status', async () => {
       const before = await openCounselorRequest(page, requestId);
       expect(before.details.status).toBe('REVIEW_REQUESTED');
+      await partnerPage.goto('/partner/requests/' + requestId);
+      await partnerPage.getByRole('button', { name: /^Comments(?:,|$)/ }).click();
+
       await partnerPage
-        .getByRole('textbox', { name: 'Write a comment...', exact: true })
+        .getByRole('textbox', { name: 'Write a case comment', exact: true })
         .fill(comment);
-      await partnerPage.getByRole('button', { name: 'Send', exact: true }).click();
+      await partnerPage.getByRole('button', { name: 'Send comment', exact: true }).click();
       await expect(partnerPage.getByText(comment, { exact: true })).toBeVisible();
       await partnerPage.reload();
+      await partnerPage.getByRole('button', { name: /^Comments(?:,|$)/ }).click();
       await expect(partnerPage.getByText(comment, { exact: true })).toBeVisible();
       const after = await openCounselorRequest(page, requestId);
       expect(after.details.status).toBe('REVIEW_REQUESTED');
@@ -106,6 +112,7 @@ test('TC-HP-009: Hospital comments without changing status and requests a design
       });
     });
     await test.step('Request Revision changes the request to REVISION_REQUESTED', async () => {
+      await partnerPage.goto('/requests/' + requestId + '/model');
       const decision = partnerPage.getByRole('region', {
         name: 'Final case decision',
         exact: true,
@@ -131,6 +138,8 @@ test('TC-HP-009: Hospital comments without changing status and requests a design
         has: partnerPage.getByRole('button', { name: /^v1 .*Design result Shared/ }),
       });
       await expect(sharedCard.getByText('Revision requested', { exact: true })).toBeVisible();
+      await partnerPage.goto('/partner/requests/' + requestId);
+      await partnerPage.getByRole('button', { name: /^Comments(?:,|$)/ }).click();
       await expect(partnerPage.getByText(comment, { exact: true })).toBeVisible();
       await test.info().attach('revision-requested', {
         body: await partnerPage.screenshot(),

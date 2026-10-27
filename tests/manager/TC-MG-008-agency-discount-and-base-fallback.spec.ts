@@ -8,14 +8,14 @@ async function openAgency(page: Page, name: string) {
 function smallRule(page: Page) {
   return page
     .getByRole('row')
-    .filter({ has: page.getByRole('cell', { name: 'Cranium', exact: true }) })
+    .filter({ has: page.getByRole('cell', { name: 'Cranial', exact: true }) })
     .filter({ has: page.getByRole('cell', { name: 'PEEK', exact: true }) })
     .filter({ has: page.getByRole('cell', { name: 'Small', exact: true }) });
 }
 
 // Uses the dedicated Agency 1/2 accounts created by TC-MG-005. Only Agency 1's
 // temporary rule is changed; the base price and existing contracts are preserved.
-test('TC-MG-008: Agency 1 receives 10 percent discount and Agency 2 without a rule uses base price', async ({
+test('TC-MG-008: Agency 1 receives 10 percent discount and Agency 2 requires a contract rule', async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -27,7 +27,7 @@ test('TC-MG-008: Agency 1 receives 10 percent discount and Agency 2 without a ru
     ),
     page.goto('/manager/pricing'),
   ]);
-  await expect(page.getByRole('heading', { name: 'Cranium / PEEK', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cranial / PEEK', exact: true })).toBeVisible();
   await expect(
     page
       .getByRole('row')
@@ -58,14 +58,26 @@ test('TC-MG-008: Agency 1 receives 10 percent discount and Agency 2 without a ru
   await expect(page.getByRole('button', { name: 'Remove rule', exact: true })).toHaveCount(0);
   expect(agencyOneId).toBeTruthy();
   expect(agencyTwoId).toBeTruthy();
+  await expect(
+    page.getByRole('cell', {
+      name: 'No contract price rules — submissions billed to this Agency are blocked.',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      'A matching rule is required. Set a fixed adjustment of 0.00 to explicitly use Standard price.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   let added = false;
   try {
-    await test.step('Save a -10 percent rule for Cranium / PEEK / Small under Agency 1', async () => {
+    await test.step('Save a -10 percent rule for Cranial / PEEK / Small under Agency 1', async () => {
       await openAgency(page, agencyOne);
       await page.getByRole('button', { name: '+ Add adjustment', exact: true }).click();
       await page
         .getByRole('combobox', { name: 'Product item', exact: true })
-        .selectOption({ label: 'Cranium' });
+        .selectOption({ label: 'Cranial' });
       await page
         .getByRole('combobox', { name: 'Material', exact: true })
         .selectOption({ label: 'PEEK' });
@@ -120,9 +132,10 @@ test('TC-MG-008: Agency 1 receives 10 percent discount and Agency 2 without a ru
         description: `${agencyOne}: ${discounted.amount}; ${agencyTwo} without rule: ${noRule.amount}; base: 900000.00 KRW`,
       });
       expect(discounted.amount).toBe('810000.00');
-      expect(noRule.amount, 'Agency 2 without a matching rule must fall back to 900,000 KRW').toBe(
-        '900000.00',
-      );
+      expect(
+        noRule.amount,
+        'Agency 2 without a contract rule must not receive a calculated price',
+      ).toBeNull();
     });
   } finally {
     if (added) {
