@@ -40,7 +40,10 @@ test('TC-HP-008: Rework resubmission creates Round 2 and preserves Round 1', asy
       });
       await row.getByRole('button', { name: 'Claim', exact: true }).click();
       await expect(row.getByRole('button', { name: 'Claim', exact: true })).toBeHidden();
-      await row.getByRole('link', { name: 'Open', exact: true }).click();
+      // Open links in the queue can be routed through a separate tab; navigate
+      // directly so the review actions are exercised in this authenticated page.
+      await counselor.goto(`/counselor/requests/${requestId}`);
+      await expect(header(counselor, requestId)).toBeVisible();
       await counselor.getByRole('button', { name: 'Start review', exact: true }).click();
       const note = counselor.getByRole('textbox', {
         name: 'Optional note for the status history',

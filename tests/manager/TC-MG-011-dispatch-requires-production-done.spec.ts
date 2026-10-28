@@ -240,9 +240,9 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
           viewerOwnsRequest: true,
           body: 'Your request has been shipped.',
         });
-        // The notification list may receive newer document events while it loads,
-        // so its rendered card order can differ from the API response order. The
-        // just-created shipment notice is the newest card with this title.
+        // Notification cards omit the request number from their visible text.
+        // The API above verifies request ownership/status, while the newest
+        // matching rendered card is the shipment event created by this test.
         const notification = partnerPage
           .getByRole('article')
           .filter({
@@ -260,17 +260,25 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
           body: await partnerPage.screenshot(),
           contentType: 'image/png',
         });
-        const [opened] = await Promise.all([
+        const requestUrl = new RegExp(`/partner/requests/${requestId}$`);
+        const samePageNavigation = expect(partnerPage)
+          .toHaveURL(requestUrl, { timeout: 15_000 })
+          .then(() => partnerPage)
+          .catch(() => null);
+        const popupNavigation = partnerPage
+          .waitForEvent('popup', { timeout: 15_000 })
+          .catch(() => null);
+        const [opened, requestPage] = await Promise.all([
           waitForGraphqlResponse(partnerPage, 'MarkNotificationRead').then((response) =>
             response.json(),
           ),
           notification.getByRole('button', { name: 'Open request', exact: true }).click(),
+          Promise.race([samePageNavigation, popupNavigation]),
         ]);
         expect(opened.errors).toBeUndefined();
-        await expect(partnerPage).toHaveURL(new RegExp(`/partner/requests/${requestId}$`), {
-          timeout: 15_000,
-        });
-        await expect(requestStatus(partnerPage, requestId, 'Shipped')).toBeVisible();
+        const destination = requestPage ?? partnerPage;
+        await expect(destination).toHaveURL(requestUrl, { timeout: 15_000 });
+        await expect(requestStatus(destination, requestId, 'Shipped')).toBeVisible();
       });
       console.log(
         JSON.stringify({ requestId, carrier, trackingNumber, shipDate, result: 'PASSED' }),
