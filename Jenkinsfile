@@ -11,6 +11,9 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+                // Refresh tracked files so existing workspaces apply .gitattributes.
+                // Git checkout can otherwise retain unchanged files with old CRLF endings.
+                bat 'git checkout-index --force --all'
             }
         }
 
@@ -52,7 +55,7 @@ pipeline {
         }
 
         failure {
-            echo 'Playwright tests failed.'
+            echo 'Pipeline failed. Check the failed stage; browser tests may have been skipped.'
         }
     }
 }
