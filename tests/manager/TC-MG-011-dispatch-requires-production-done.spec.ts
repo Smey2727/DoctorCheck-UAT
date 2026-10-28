@@ -228,21 +228,22 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
         ]);
         expect(notificationsBody.errors).toBeUndefined();
         await expect(partnerPage.getByText('Loading notifications', { exact: true })).toBeHidden();
-        const shipmentNotice = notificationsBody.data.notifications.find(
-          (entry: { title: string }) => entry.title === 'Shipment dispatched',
+        const shipmentNoticeIndex = notificationsBody.data.notifications.findIndex(
+          (entry: { title: string; requestNo: string }) =>
+            entry.title === 'Shipment dispatched' && entry.requestNo === requestId,
         );
+        expect(shipmentNoticeIndex).toBeGreaterThanOrEqual(0);
+        const shipmentNotice = notificationsBody.data.notifications[shipmentNoticeIndex];
         expect(shipmentNotice).toMatchObject({
           requestNo: requestId,
           requestStatus: 'SHIPPED',
           viewerOwnsRequest: true,
           body: 'Your request has been shipped.',
         });
-        // Shipment notifications omit the request number from the card text.
-        // Verify the destination of the newest dispatched notification instead.
-        const notification = partnerPage
-          .getByRole('article')
-          .filter({ hasText: 'Shipment dispatched' })
-          .first();
+        // Notification cards omit the request number, so use the matching API
+        // entry's position to select its corresponding article instead of another
+        // request's card with the same title and body.
+        const notification = partnerPage.getByRole('article').nth(shipmentNoticeIndex);
         await expect(notification).toBeVisible();
         await expect(notification).toContainText('Your request has been shipped.');
         await test.info().attach('hospital-shipment-notification', {

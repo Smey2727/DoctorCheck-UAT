@@ -111,3 +111,63 @@ export async function createHospitalReworkRequest(
   await expect(page.getByRole('heading', { name: requestId, exact: true })).toBeVisible();
   return requestId;
 }
+
+// Cranial / PEEK is unavailable to Agency A until its contract has a rule for
+// every size. Add only missing zero-adjustment rules and return cleanup for UAT.
+export async function ensureAgencyCranialPeekPricing(manager: Page) {
+  const addedRules: string[] = [];
+  const rule = (size: string) =>
+    manager
+      .getByRole('row')
+      .filter({ has: manager.getByRole('cell', { name: 'Cranial', exact: true }) })
+      .filter({ has: manager.getByRole('cell', { name: 'PEEK', exact: true }) })
+      .filter({ has: manager.getByRole('cell', { name: size, exact: true }) });
+  async function openContract() {
+    await manager.goto('/manager/pricing');
+    await manager.getByRole('button', { name: 'Agency contract pricing', exact: true }).click();
+    await Promise.all([
+      waitForGraphqlResponse(manager, 'AgencyPricing'),
+      manager.getByRole('button', { name: 'Agency A', exact: true }).click(),
+    ]);
+    await expect(manager.getByRole('heading', { name: 'Agency A', exact: true })).toBeVisible();
+  }
+  async function cleanup() {
+    for (const size of addedRules) {
+      await openContract();
+      const savedRule = rule(size);
+      if (!(await savedRule.count())) continue;
+      await savedRule.getByRole('button', { name: 'Remove rule', exact: true }).click();
+      const confirmation = manager.getByRole('alertdialog');
+      await confirmation.getByRole('button', { name: 'Remove rule', exact: true }).click();
+      await expect(confirmation).toBeHidden();
+      await expect(savedRule).toHaveCount(0);
+    }
+  }
+  try {
+    await openContract();
+    for (const size of ['Small', 'Medium', 'Large', 'Extra']) {
+      if (await rule(size).count()) continue;
+      await manager.getByRole('button', { name: '+ Add adjustment', exact: true }).click();
+      await manager
+        .getByRole('combobox', { name: 'Product item', exact: true })
+        .selectOption({ label: 'Cranial' });
+      await manager
+        .getByRole('combobox', { name: 'Material', exact: true })
+        .selectOption({ label: 'PEEK' });
+      await manager
+        .getByRole('combobox', { name: 'Size bucket', exact: true })
+        .selectOption({ label: size });
+      await manager
+        .getByRole('combobox', { name: 'Type', exact: true })
+        .selectOption({ label: 'Percent' });
+      await manager.getByRole('textbox', { name: 'New adjustment value', exact: true }).fill('0');
+      await manager.getByRole('button', { name: 'Add', exact: true }).click();
+      await expect(rule(size)).toBeVisible();
+      addedRules.push(size);
+    }
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+  return cleanup;
+}
