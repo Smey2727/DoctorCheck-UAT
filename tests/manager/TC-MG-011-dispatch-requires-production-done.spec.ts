@@ -240,10 +240,16 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
           viewerOwnsRequest: true,
           body: 'Your request has been shipped.',
         });
-        // Notification cards omit the request number, so use the matching API
-        // entry's position to select its corresponding article instead of another
-        // request's card with the same title and body.
-        const notification = partnerPage.getByRole('article').nth(shipmentNoticeIndex);
+        // The notification list may receive newer document events while it loads,
+        // so its rendered card order can differ from the API response order. The
+        // just-created shipment notice is the newest card with this title.
+        const notification = partnerPage
+          .getByRole('article')
+          .filter({
+            has: partnerPage.getByRole('heading', { name: 'Shipment dispatched', exact: true }),
+          })
+          .filter({ hasText: 'Your request has been shipped.' })
+          .first();
         await expect(notification).toBeVisible();
         await expect(notification).toContainText('Your request has been shipped.');
         await test.info().attach('hospital-shipment-notification', {

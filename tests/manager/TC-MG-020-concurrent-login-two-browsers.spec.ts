@@ -17,12 +17,17 @@ test('TC-MG-020: The same Manager account remains functional in two independent 
   const results: object[] = [];
 
   async function verifyProtectedList(page: Page, session: string, reload = false) {
-    const [response] = await Promise.all([
-      waitForGraphqlResponse(page, 'Requests'),
+    // Leave the landing page before listening so a pending list query from login
+    // cannot be confused with the fresh protected-list request below.
+    if (!reload) await page.goto('/account');
+    const [{ ok, body }] = await Promise.all([
+      waitForGraphqlResponse(page, 'Requests').then(async (response) => ({
+        ok: response.ok(),
+        body: await response.json(),
+      })),
       reload ? page.reload() : page.goto('/manager/requests'),
     ]);
-    expect(response.ok(), `${session}: protected request-list API must succeed`).toBe(true);
-    const body = await response.json();
+    expect(ok, `${session}: protected request-list API must succeed`).toBe(true);
     expect(body.errors, `${session}: no authentication or API errors`).toBeUndefined();
     expect(body.data.requests.items.length).toBeGreaterThan(0);
     await expect(page).toHaveURL(/\/manager\/requests$/);
