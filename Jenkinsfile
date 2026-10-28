@@ -11,9 +11,6 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                // Refresh tracked files so existing workspaces apply .gitattributes.
-                // Git checkout can otherwise retain unchanged files with old CRLF endings.
-                bat 'git checkout-index --force --all'
             }
         }
 
@@ -31,6 +28,8 @@ pipeline {
 
         stage('Check Code') {
             steps {
+                // Existing Windows workspaces can retain CRLF despite .gitattributes.
+                bat 'node scripts/normalize-line-endings.cjs'
                 bat 'npm run check'
             }
         }
