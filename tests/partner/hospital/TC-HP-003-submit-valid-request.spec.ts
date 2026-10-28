@@ -1,9 +1,33 @@
 import { randomUUID } from 'node:crypto';
-import { expect, test } from '@playwright/test';
+import { expect, Page, test } from '@playwright/test';
 import { waitForGraphqlResponse } from '../../helpers/graphql';
 import { signIn, USERS } from '../../helpers/auth';
 import { createHospitalReworkRequest } from '../../helpers/requests';
 import { syntheticCtRoundTwo } from '../../helpers/synthetic-ct';
+
+async function submissionNotification(page: Page, requestId: string, message: RegExp) {
+  // The shared UAT inbox is large. Navigation can finish before its data arrives.
+  const [response] = await Promise.all([
+    waitForGraphqlResponse(page, 'Notifications'),
+    page.goto('/notifications'),
+  ]);
+  const body = await response.json();
+  expect(body.errors).toBeUndefined();
+  expect(
+    body.data.notifications.some(
+      (entry: { requestNo: string; title: string; body: string }) =>
+        entry.requestNo === requestId && message.test(`${entry.title} ${entry.body}`),
+    ),
+    `Submission notification for ${requestId} must exist in this user's inbox`,
+  ).toBe(true);
+  const notification = page
+    .getByRole('article')
+    .filter({ hasText: requestId })
+    .filter({ hasText: message });
+  await expect(notification).toHaveCount(1, { timeout: 15_000 });
+  await expect(notification).toBeVisible();
+  return notification;
+}
 
 test('TC-HP-003: Valid submission creates an Info Sheet, notifies both roles and enters the Counselor queue', async ({
   page,
@@ -84,12 +108,7 @@ test('TC-HP-003: Valid submission creates an Info Sheet, notifies both roles and
       await expect(document.getByRole('button', { name: 'Open', exact: true })).toBeVisible();
     });
     await test.step('Hospital receives submission confirmation for this request', async () => {
-      await page.goto('/notifications');
-      const notification = page
-        .getByRole('article')
-        .filter({ hasText: requestId })
-        .filter({ hasText: /submitted|submission/i });
-      await expect(notification).toHaveCount(1);
+      const notification = await submissionNotification(page, requestId, /submitted|submission/i);
       evidence.hospitalNotification = await notification.innerText();
       await test.info().attach('hospital-confirmation', {
         body: await page.screenshot(),
@@ -97,12 +116,11 @@ test('TC-HP-003: Valid submission creates an Info Sheet, notifies both roles and
       });
     });
     await test.step('Counselor receives a new-request notification', async () => {
-      await counselor.goto('/notifications');
-      const notification = counselor
-        .getByRole('article')
-        .filter({ hasText: requestId })
-        .filter({ hasText: /submitted|submission|new request/i });
-      await expect(notification).toHaveCount(1);
+      const notification = await submissionNotification(
+        counselor,
+        requestId,
+        /submitted|submission|new request/i,
+      );
       evidence.counselorNotification = await notification.innerText();
       await test.info().attach('counselor-notified', {
         body: await counselor.screenshot(),
