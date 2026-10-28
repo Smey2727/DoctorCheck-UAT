@@ -1,0 +1,6 @@
+# Keep source files compatible with Prettier on Windows and in Jenkins.
+* text=auto eol=lf
+
+# Windows command scripts use native line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
