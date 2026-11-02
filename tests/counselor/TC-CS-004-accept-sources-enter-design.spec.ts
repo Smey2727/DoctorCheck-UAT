@@ -4,6 +4,7 @@ import { waitForGraphqlResponse } from '../helpers/graphql';
 import { signIn, USERS } from '../helpers/auth';
 import { createHospitalReworkRequest } from '../helpers/requests';
 import { syntheticCtRoundTwo } from '../helpers/synthetic-ct';
+import { waitForUpload } from '../helpers/uploads';
 
 function currentStatus(page: Page, requestId: string, status: string) {
   return page
@@ -79,6 +80,14 @@ test('TC-CS-004: Counselor can accept Round 2 sources and enter the design stage
       await expect(
         hospitalPage.getByText(syntheticCtRoundTwo.name, { exact: true }).first(),
       ).toBeVisible();
+      // A selected filename does not mean the upload has finished. Honor any
+      // server cooldown before trying to submit the corrected round.
+      await waitForUpload(hospitalPage, () =>
+        hospitalPage
+          .getByRole('group', { name: 'CT file', exact: true })
+          .getByText(`Uploaded: ${syntheticCtRoundTwo.name}`, { exact: true })
+          .isVisible(),
+      );
       await hospitalPage
         .getByRole('button', { name: 'Resubmit request', exact: true })
         .first()
