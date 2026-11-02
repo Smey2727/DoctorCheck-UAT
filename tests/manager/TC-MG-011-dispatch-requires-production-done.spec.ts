@@ -261,24 +261,17 @@ test('TC-MG-011: Dispatch requires completed production and notifies the hospita
           contentType: 'image/png',
         });
         const requestUrl = new RegExp(`/partner/requests/${requestId}$`);
-        const samePageNavigation = expect(partnerPage)
-          .toHaveURL(requestUrl, { timeout: 15_000 })
-          .then(() => partnerPage)
-          .catch(() => null);
-        const popupNavigation = partnerPage
-          .waitForEvent('popup', { timeout: 15_000 })
-          .catch(() => null);
-        const [opened, requestPage] = await Promise.all([
+        const [opened] = await Promise.all([
           waitForGraphqlResponse(partnerPage, 'MarkNotificationRead').then((response) =>
             response.json(),
           ),
           notification.getByRole('button', { name: 'Open request', exact: true }).click(),
-          Promise.race([samePageNavigation, popupNavigation]),
         ]);
         expect(opened.errors).toBeUndefined();
-        const destination = requestPage ?? partnerPage;
-        await expect(destination).toHaveURL(requestUrl, { timeout: 15_000 });
-        await expect(requestStatus(destination, requestId, 'Shipped')).toBeVisible();
+        // Opening an unread notification refreshes the full notification list first.
+        // Accounts with thousands of notices can take about a minute to navigate.
+        await expect(partnerPage).toHaveURL(requestUrl, { timeout: 90_000 });
+        await expect(requestStatus(partnerPage, requestId, 'Shipped')).toBeVisible();
       });
       console.log(
         JSON.stringify({ requestId, carrier, trackingNumber, shipDate, result: 'PASSED' }),

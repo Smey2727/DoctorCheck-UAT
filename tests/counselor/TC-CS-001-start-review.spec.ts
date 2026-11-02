@@ -49,7 +49,7 @@ test('TC-CS-001: Counselor can claim a request and start review', async ({
   const claimButton = requestRow.getByRole('button', { name: 'Claim', exact: true });
   await claimButton.click();
   await expect(claimButton).toBeHidden();
-  await requestRow.getByRole('link', { name: 'Open', exact: true }).click();
+  await requestRow.getByRole('link', { name: requestId, exact: true }).click();
 
   const requestHeading = page.getByRole('heading', { name: requestId, exact: true });
   await expect(requestHeading).toBeVisible();

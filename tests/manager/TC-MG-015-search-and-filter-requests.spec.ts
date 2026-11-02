@@ -18,10 +18,7 @@ test('TC-MG-015: Manager filters by status and searches by exact request number'
   const [initial] = await Promise.all([queueResponse(), page.goto('/manager/requests')]);
   await expect(page.getByRole('heading', { name: 'All requests', exact: true })).toBeVisible();
   const status = page.getByRole('combobox', { name: 'Status', exact: true });
-  const search = page.getByRole('textbox', {
-    name: 'Search request, case, hospital, product, agency',
-    exact: true,
-  });
+  const search = page.getByRole('searchbox', { name: /^Search request no\./ });
   const rows = page.locator('tbody').getByRole('row');
   const matchingIds: string[] = [];
   await test.step('PRODUCTION_HANDOFF filter returns only matching requests on every page', async () => {
@@ -29,8 +26,8 @@ test('TC-MG-015: Manager filters by status and searches by exact request number'
       queueResponse(),
       status.selectOption('PRODUCTION_HANDOFF'),
     ]);
-    expect(filtered.totalCount).toBeGreaterThan(0);
-    expect(filtered.totalCount).toBeLessThan(initial.totalCount);
+    expect(filtered.pageInfo.totalCount).toBeGreaterThan(0);
+    expect(filtered.pageInfo.totalCount).toBeLessThan(initial.pageInfo.totalCount);
     let current = filtered;
     while (true) {
       await expect(rows).toHaveCount(current.items.length);
@@ -44,15 +41,15 @@ test('TC-MG-015: Manager filters by status and searches by exact request number'
         ).toBeVisible();
         matchingIds.push(item.requestNo);
       }
-      const next = page.getByRole('button', { name: 'Next', exact: true });
-      if (matchingIds.length === filtered.totalCount) {
+      const next = page.getByRole('button', { name: 'Next page', exact: true });
+      if (matchingIds.length === filtered.pageInfo.totalCount) {
         await expect(next).toBeDisabled();
         break;
       }
       expect(current.items.length).toBeGreaterThan(0);
       [current] = await Promise.all([queueResponse(), next.click()]);
     }
-    expect(new Set(matchingIds).size).toBe(filtered.totalCount);
+    expect(new Set(matchingIds).size).toBe(filtered.pageInfo.totalCount);
     await test.info().attach('status-filter', {
       body: JSON.stringify({ status: 'PRODUCTION_HANDOFF', matchingIds }, null, 2),
       contentType: 'application/json',
@@ -60,12 +57,12 @@ test('TC-MG-015: Manager filters by status and searches by exact request number'
   });
   const target = matchingIds[0];
   async function exactResult(result: any) {
-    expect(result.totalCount).toBe(1);
+    expect(result.pageInfo.totalCount).toBe(1);
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({ requestNo: target, status: 'PRODUCTION_HANDOFF' });
     await expect(rows).toHaveCount(1);
     await expect(rows.getByRole('cell', { name: target, exact: true })).toBeVisible();
-    await expect(rows.getByRole('link', { name: 'Open', exact: true })).toHaveAttribute(
+    await expect(rows.getByRole('link', { name: target, exact: true })).toHaveAttribute(
       'href',
       `/manager/requests/${target}`,
     );
@@ -91,7 +88,7 @@ test('TC-MG-015: Manager filters by status and searches by exact request number'
   });
   await test.step('A conflicting status filter excludes the searched request', async () => {
     const [result] = await Promise.all([queueResponse(), status.selectOption('COMPLETED')]);
-    expect(result.totalCount).toBe(0);
+    expect(result.pageInfo.totalCount).toBe(0);
     expect(result.items).toHaveLength(0);
     await expect(rows.getByRole('cell', { name: target, exact: true })).toHaveCount(0);
   });

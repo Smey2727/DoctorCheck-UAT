@@ -67,12 +67,11 @@ test('TC-HP-014: Draft fields and CT file survive logout and login until submiss
     ]);
     expect(saved.errors).toBeUndefined();
     expect(saved.data.saveRequestDraft.status).toBe('DRAFT');
-    await expect(page).toHaveURL(/\/partner\/requests$/);
-    await page.getByRole('link', { name: /^Drafts/ }).click();
+    await expect(page).toHaveURL(/\/partner\/requests\?view=drafts$/);
     await page.getByPlaceholder('Search patient, Hospital, doctor, or request no.').fill(code);
     const requestId = saved.data.saveRequestDraft.requestNo;
     const resumeLink = page.locator('a[href="/partner/requests/' + requestId + '/edit"]');
-    const draftRow = page.getByRole('listitem').filter({ has: resumeLink });
+    const draftRow = page.getByRole('row').filter({ has: resumeLink });
     await expect(draftRow).toHaveCount(1);
     test.info().annotations.push({ type: 'request', description: requestId });
     await expect(draftRow.getByRole('button', { name: 'Draft', exact: true })).toBeVisible();

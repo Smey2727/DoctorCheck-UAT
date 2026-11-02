@@ -30,7 +30,7 @@ test('TC-CS-002: Counselor can request rework and notify the hospital with the r
     const claim = row.getByRole('button', { name: 'Claim', exact: true });
     await claim.click();
     await expect(claim).toBeHidden();
-    await row.getByRole('link', { name: 'Open', exact: true }).click();
+    await row.getByRole('link', { name: requestId, exact: true }).click();
 
     const heading = page.getByRole('heading', { name: requestId, exact: true });
     await expect(heading).toBeVisible();

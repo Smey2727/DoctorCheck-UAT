@@ -99,7 +99,7 @@ test('TC-AG-010: Agency 1 cannot see a direct-billed DoctorCheck Demo Hospital r
         page.getByPlaceholder('Search patient, Hospital, doctor, or request no.').fill(requestNo),
       ]);
       expect(body.errors).toBeUndefined();
-      expect(body.data.requests).toMatchObject({ items: [], totalCount: 0 });
+      expect(body.data.requests).toMatchObject({ items: [], pageInfo: { totalCount: 0 } });
       await expect(page.getByRole('cell', { name: requestNo, exact: true })).toHaveCount(0);
       await test.info().attach('direct-hospital-not-in-agency-list', {
         body: await page.screenshot(),

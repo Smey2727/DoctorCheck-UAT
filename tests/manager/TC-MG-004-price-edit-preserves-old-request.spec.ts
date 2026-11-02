@@ -53,25 +53,24 @@ async function requestSnapshot(page: Page) {
 }
 
 async function billSnapshot(page: Page) {
-  await page.goto('/manager/billing');
-  await page.getByRole('combobox', { name: 'Year', exact: true }).selectOption('2026');
-  const [body] = await Promise.all([
-    page
-      .waitForResponse(async (r) => {
-        if (
-          !r.url().endsWith('/graphql') ||
-          r.request().postDataJSON()?.operationName !== 'BillingSummary'
-        ) {
-          return false;
-        }
-        const b = await r.json();
-        return b.data?.billingSummary?.directPartnerGroups?.some((g: any) =>
-          g.requests.some((row: any) => row.requestNo === REQUEST),
-        );
-      })
-      .then((response) => response.json()),
-    page.getByRole('combobox', { name: 'Month', exact: true }).selectOption('9'),
+  // Discard pending queries from the request detail before observing billing.
+  await page.goto('about:blank');
+  let [body] = await Promise.all([
+    waitForGraphqlResponse(page, 'BillingSummary').then((response) => response.json()),
+    page.goto('/manager/billing'),
   ]);
+  for (const [name, value] of [
+    ['Year', '2026'],
+    ['Month', '9'],
+  ]) {
+    const filter = page.getByRole('combobox', { name, exact: true });
+    if ((await filter.inputValue()) !== value) {
+      [body] = await Promise.all([
+        waitForGraphqlResponse(page, 'BillingSummary').then((response) => response.json()),
+        filter.selectOption(value),
+      ]);
+    }
+  }
   expect(body.errors).toBeUndefined();
   const group = body.data.billingSummary.directPartnerGroups.find(
     (g: any) => g.billedToName === HOSPITAL,

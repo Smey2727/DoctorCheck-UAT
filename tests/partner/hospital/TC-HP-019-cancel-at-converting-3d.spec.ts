@@ -134,7 +134,11 @@ test('TC-HP-019: Direct cancellation at Converting 3D freezes the request', asyn
         contentType: 'image/png',
       });
       for (const route of ['edit', 'resubmit']) {
-        await page.goto(`/partner/requests/${requestId}/${route}`);
+        // Wait for access resolution before asserting that the form is absent.
+        await Promise.all([
+          waitForGraphqlResponse(page, 'Request').then((response) => response.json()),
+          page.goto(`/partner/requests/${requestId}/${route}`),
+        ]);
         await expect(page.getByRole('button', { name: forbidden })).toHaveCount(0);
         await expect(
           page.getByRole('textbox', { name: 'Case description', exact: true }),

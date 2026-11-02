@@ -123,7 +123,7 @@ test('TC-AG-005: Non-selected Agency 1 cannot list, open or see bills for Agency
         ]);
         expect(body.errors).toBeUndefined();
         expect(body.data.requests.items).toHaveLength(0);
-        expect(body.data.requests.totalCount).toBe(0);
+        expect(body.data.requests.pageInfo.totalCount).toBe(0);
         await expect(agency.getByRole('cell', { name: requestNo, exact: true })).toHaveCount(0);
         await expect(agency.locator(`a[href$="/${requestNo}"]`)).toHaveCount(0);
       }

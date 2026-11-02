@@ -110,7 +110,7 @@ async function verifyOwnRequestsOnly(page: Page, requestIds: string[]) {
     page.goto('/partner/requests'),
   ]);
   expect(body.errors).toBeUndefined();
-  expect(body.data.requests.totalCount).toBe(requestIds.length);
+  expect(body.data.requests.pageInfo.totalCount).toBe(requestIds.length);
   expect(body.data.requests.items.map((r: any) => r.requestNo).sort()).toEqual(
     [...requestIds].sort(),
   );

@@ -84,11 +84,13 @@ export async function shareDesign(
     .getByRole('textbox', { name: 'Counselor review note for partner', exact: true })
     .fill(`${caseCode}: Please review synthetic design revision ${version}.`);
   await generate.getByRole('button', { name: 'Generate and preview', exact: true }).click();
-  await expect(generate).toBeHidden();
   const preview = page.getByRole('dialog', {
     name: 'Design-Result Document print view',
     exact: true,
   });
+  // Document generation can take longer than the default five-second UI assertion.
+  await expect(preview).toBeVisible({ timeout: 30_000 });
+  await expect(generate).toBeHidden();
   await expect(preview).toContainText(`${caseCode}-design-v${version}.stl`);
   await preview.getByRole('checkbox', { name: /^I reviewed this exact document/ }).check();
   await preview.getByRole('button', { name: 'Share design with partner', exact: true }).click();

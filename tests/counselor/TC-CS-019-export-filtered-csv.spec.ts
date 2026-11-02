@@ -53,9 +53,7 @@ interface QueueItem {
 }
 interface QueuePage {
   items: QueueItem[];
-  totalCount: number;
-  page: number;
-  size: number;
+  pageInfo: { totalCount: number; page: number; size: number };
 }
 
 function waitForQueue(page: Page, pageNumber: number, hospitalId?: string) {
@@ -67,7 +65,7 @@ function waitForQueue(page: Page, pageNumber: number, hospitalId?: string) {
       const body = response.request().postDataJSON();
       return (
         body?.operationName === 'CounselorRequestQueue' &&
-        body.variables.input.page === pageNumber &&
+        body.variables.paging.page === pageNumber &&
         JSON.stringify(body.variables.input.statuses) === '["SUBMITTED"]' &&
         (body.variables.input.hospitalId ?? undefined) === hospitalId
       );
@@ -83,7 +81,7 @@ async function collectQueue(page: Page, first: QueuePage, hospitalId?: string) {
   const expected: QueueItem[] = [];
   let current = first;
   while (true) {
-    expect(current.totalCount).toBe(first.totalCount);
+    expect(current.pageInfo.totalCount).toBe(first.pageInfo.totalCount);
     await expect(page.locator('tbody').getByRole('row')).toHaveCount(current.items.length);
     for (const item of current.items) {
       expect(item.status).toBe('SUBMITTED');
@@ -93,16 +91,19 @@ async function collectQueue(page: Page, first: QueuePage, hospitalId?: string) {
       await expect(row.getByRole('button', { name: 'Submitted', exact: true })).toBeVisible();
       expected.push(item);
     }
-    const next = page.getByRole('button', { name: 'Next', exact: true });
-    if (expected.length === first.totalCount) {
+    const next = page.getByRole('button', { name: 'Next page', exact: true });
+    if (expected.length === first.pageInfo.totalCount) {
       await expect(next).toBeDisabled();
       break;
     }
     expect(current.items.length).toBeGreaterThan(0);
     await expect(next).toBeEnabled();
-    [current] = await Promise.all([waitForQueue(page, current.page + 1, hospitalId), next.click()]);
+    [current] = await Promise.all([
+      waitForQueue(page, current.pageInfo.page + 1, hospitalId),
+      next.click(),
+    ]);
   }
-  expect(new Set(expected.map((item) => item.requestNo)).size).toBe(first.totalCount);
+  expect(new Set(expected.map((item) => item.requestNo)).size).toBe(first.pageInfo.totalCount);
   return expected;
 }
 
@@ -184,7 +185,7 @@ test('TC-CS-019: Filtered CSV contains only matching requests and correct column
       .selectOption({ label: 'Submitted' }),
   ]);
   expect(
-    first.totalCount,
+    first.pageInfo.totalCount,
     'UAT needs at least one Submitted request to verify a nonempty export',
   ).toBeGreaterThan(0);
   let submitted: QueueItem[] = [];
